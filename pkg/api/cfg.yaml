@@ -1,0 +1,8 @@
+package: api
+output: cache.gen.go
+generate:
+  embedded-spec: true
+  models: true
+  echo-server: true
+  strict-server: false
+  client: true

@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "wolfeidau: buildkite cache API running in AWS Lambda"
+Parameters:
+  AppName:
+    Type: String
+    Description: Application Name used to store configuration.
+  Stage:
+    Type: String
+    Description: The stage where the application is running in, e.g., dev, prod.
+    Default: dev
+  Branch:
+    Type: String
+    Default: main
+  RetentionInDays:
+    Description:
+      Retain the assets uploaded to the deployment bucket for this many
+      days.
+    Type: Number
+    Default: 7
+  ContainerImageUri:
+    Description: The container image URI which hosts the images.
+    Type: String
+  OIDCIssuer:
+    Description: The OIDC Issuer URL.
+    Type: String
+  OIDCAudience:
+    Description: The OIDC Audience.
+    Type: String
+
+Outputs:
+  HttpAPIURL:
+    Description: "API Gateway endpoint URL for Prod stage for web api"
+    Value: !Sub "https://${HttpAPI}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
+  CacheBucket:
+    Description: "The name of the bucket where the cache is stored"
+    Value: !Ref CacheBucket
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        APP_NAME: !Ref AppName
+        STAGE: !Ref Stage
+        BRANCH: !Ref Branch
+
+Resources:
+  CacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteEverything
+            Prefix: ""
+            Status: Enabled
+            ExpirationInDays:
+              Ref: RetentionInDays
+
+  CacheBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: CacheBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:*
+            Resource:
+              - Fn::Sub: arn:aws:s3:::${CacheBucket}/*
+              - Fn::Sub: arn:aws:s3:::${CacheBucket}
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  HTTPAPIAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway-v2/AccessLog-${AppName}-${Stage}-${Branch}"
+      RetentionInDays: !Ref RetentionInDays
+
+  HttpAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      FailOnWarnings: True
+      Auth:
+        Authorizers:
+          OAuth2Authorizer:
+            IdentitySource:
+              - '$request.header.Authorization'
+            JwtConfiguration:
+              Audience:
+                - !Ref OIDCAudience
+              Issuer: !Ref OIDCIssuer
+        DefaultAuthorizer: OAuth2Authorizer
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+        DetailedMetricsEnabled: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt HTTPAPIAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","domainName":"$context.domainName","httpMethod":"$context.httpMethod","identitySourceIp":"$context.identity.sourceIp","path":"$context.path","protocol":"$context.protocol","requestTime":"$context.requestTime","status":"$context.status","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","integrationLatency":"$context.integrationLatency","authorizerError":"$context.authorizer.error","integrationErrorMessage":"$context.integrationErrorMessage","errorMessage":"$context.error.message","errorResponseType":"$context.error.responseType"}'
+
+  ObjectCacheAPILambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ObjectCacheAPILambda}"
+      RetentionInDays: !Ref RetentionInDays
+
+  ObjectCacheAPILambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Events:
+        ApiCall:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpAPI
+      ImageUri: !Ref ContainerImageUri
+      ImageConfig:
+        Command: ['lambda-server']
+      Environment:
+        Variables:
+          OIDC_ISSUER: !Ref OIDCIssuer
+          CACHE_BUCKET: !Ref CacheBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref CacheBucket
+        - S3WritePolicy:
+            BucketName: !Ref CacheBucket
+      Architectures:
+        - arm64

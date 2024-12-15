@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'wolfeidau: container storage for docker images'
+
+Parameters:
+  AppName:
+    Type: String
+    Description: The name of the application.
+
+  Stage:
+    Type: String
+    Description: The stage where the application is running in, e.g., dev, prod.
+    Default: "dev"
+
+  Branch:
+    Type: String
+    Default: "main"
+
+Outputs:
+  RepositoryArn:
+    Description: "Repository ARN"
+    Value: !GetAtt Repository.Arn
+  RepositoryUri:
+    Description: "Repository URI"
+    Value: !GetAtt Repository.RepositoryUri
+  RepositoryHostname:
+    Description: "Repository Hostname"
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${AppName}_${Stage}_${Branch}"
+      ImageTagMutability: IMMUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["${Stage}_"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 2
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 2
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  RepositoryArnParam:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_arn"
+      Type: "String"
+      Value: !GetAtt Repository.Arn
+      Description: "ECR Repository ARN"
+
+  RepositoryUriParam:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_uri"
+      Type: "String"
+      Value: !GetAtt Repository.RepositoryUri
+      Description: "ECR Repository URI"
+
+  RepositoryHostnameParam:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_hostname"
+      Type: "String"
+      Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+      Description: "ECR Repository Hostname"

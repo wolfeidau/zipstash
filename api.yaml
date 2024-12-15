@@ -1,0 +1,270 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Object Cache Server
+paths:
+  /v1/cache/{provider}:
+    post:
+      summary: Creates a cache entry
+      operationId: createCacheEntry
+      parameters:
+        - in: path
+          name: provider
+          schema:
+            type: string
+          required: true
+          description: Name of the provider.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CacheEntryCreateRequest'
+      responses:
+        '201':
+          description: cache response with upload instructions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheEntryCreateResponse'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Updates a cache entry
+      operationId: updateCacheEntry
+      parameters:
+        - in: path
+          name: provider
+          schema:
+            type: string
+          required: true
+          description: Name of the provider.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CacheEntryUpdateRequest'
+      responses:
+        '200':
+          description: cache response with upload instructions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheEntryUpdateResponse'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/cache/{provider}/{key}:
+    get:
+      summary: Get a cache entry by key
+      operationId: getCacheEntryByKey
+      parameters:
+        - in: path
+          name: provider
+          schema:
+            type: string
+          required: true
+          description: Name of the provider.
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: cache response with cache entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheEntryGetResponse'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    CacheEntry:
+      required:
+        - key
+        - file_size
+        - compression
+        - sha256sum
+      properties:
+        key:
+          type: string
+          description: Key of the cache entry
+          example: my-cache-entry
+          minLength: 1
+        file_size:
+          type: integer
+          format: int64
+          description: Size of the cache entry in bytes
+          example: 102
+          minimum: 1
+        compression:
+          type: string
+          description: Compression algorithm
+          example: gzip
+          minLength: 3
+        sha256sum:
+          type: string
+          description: SHA256 checksum of the cache entry
+          example: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+          minLength: 64
+        url:
+          type: string
+          description: URL to upload the cache entry
+          minLength: 1
+    CacheEntryCreateRequest:
+      required:
+      - multipart_supported
+      - cache_entry
+      properties:
+        cache_entry:
+          $ref: '#/components/schemas/CacheEntry'
+        multipart_supported:
+          type: boolean
+          description: multipart supported
+    Offset:
+      required:
+      - start
+      - end
+      - part
+      properties:
+        part:
+          type: integer
+          format: int32
+          description: Part number
+          minimum: 1
+          maximum: 10000
+        start:
+          type: integer
+          format: int64
+          description: Start position of the part
+          minimum: 0
+        end:
+          type: integer
+          format: int64
+          description: End position of the part
+          minimum: 1
+    CacheUploadInstruction:
+      required:
+        - url
+        - method
+        - key
+      properties:
+        url:
+          type: string
+          description: URL
+        method:
+          type: string
+          description: HTTP method
+        key:
+          type: string
+          description: Key of the cache entry
+          minLength: 1
+        offset:
+          $ref: '#/components/schemas/Offset'
+    CacheEntryCreateResponse:
+      required:
+        - id
+        - upload_instructions
+      properties:
+        id:
+          type: string
+          description: Upload ID
+        upload_instructions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CacheUploadInstruction'
+    CachePartETag:
+      required:
+        - part
+        - etag
+      description: Part index and ETag
+      properties:
+        part:
+          type: integer
+          format: int32
+          description: Part index
+          minimum: 1
+        etag:
+          type: string
+          description: ETag
+          minLength: 1
+    CacheEntryUpdateRequest:
+      required:
+        - id
+        - key
+        - multipart_etags
+      properties:
+        id:
+          type: string
+          description: Upload ID
+        key:
+          type: string
+          description: Key of the cache entry
+          example: my-cache-entry
+          minLength: 1
+        multipart_etags:
+          type: array
+          description: ETags
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CachePartETag'
+    CacheEntryUpdateResponse:
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Response ID
+    CacheDownloadInstruction:
+      required:
+        - url
+        - method
+        - key
+      properties:
+        url:
+          type: string
+          description: URL
+        method:
+          type: string
+          description: HTTP method
+        key:
+          type: string
+          description: Key of the cache entry
+          minLength: 1
+        offset:
+          $ref: '#/components/schemas/Offset'
+    CacheEntryGetResponse:
+      required:
+        - cache_entry
+        - download_instructions
+      properties:
+        cache_entry:
+          $ref: '#/components/schemas/CacheEntry'
+        download_instructions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CacheDownloadInstruction'
+    Error:
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: Error code
+        message:
+          type: string
+          description: Error message
