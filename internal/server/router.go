@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/labstack/echo/v4"
 	oapi_middleware "github.com/oapi-codegen/echo-middleware"
 	echo_middleware "github.com/wolfeidau/echo-middleware"
@@ -14,6 +15,7 @@ import (
 type Config struct {
 	JWKSURL     string
 	CacheBucket string
+	GetS3Client S3ClientFunc
 }
 
 func Setup(ctx context.Context, e *echo.Echo, cfg Config, mws ...echo.MiddlewareFunc) error {
@@ -24,10 +26,7 @@ func Setup(ctx context.Context, e *echo.Echo, cfg Config, mws ...echo.Middleware
 
 	swagger.Servers = nil
 
-	cacheAPI, err := NewCache(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create cache: %w", err)
-	}
+	cacheAPI := NewCache(ctx, cfg)
 
 	e.Use(echo_middleware.ZeroLogRequestLog())
 
@@ -41,3 +40,5 @@ func Setup(ctx context.Context, e *echo.Echo, cfg Config, mws ...echo.Middleware
 
 	return nil
 }
+
+type S3ClientFunc func() *s3.Client

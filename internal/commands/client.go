@@ -82,6 +82,8 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
+	log.Info().Str("id", createResp.JSON201.Id).Int("len", len(etags)).Msg("updating cache entry")
+
 	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, "GitHubActions", api.CacheEntryUpdateRequest{
 		Id:             createResp.JSON201.Id,
 		Key:            c.Key,

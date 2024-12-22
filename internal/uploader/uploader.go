@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/cenkalti/backoff/v5"
@@ -86,8 +87,11 @@ func (u *Uploader) Upload(ctx context.Context) ([]api.CachePartETag, error) {
 func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadInstruction) (api.CachePartETag, error) {
 	_, span := trace.Start(ctx, "Uploader.upload")
 	defer span.End()
+	size := int64(0)
 
-	size := uploadInstruct.Offset.End - uploadInstruct.Offset.Start
+	if uploadInstruct.Offset != nil {
+		size = uploadInstruct.Offset.End - uploadInstruct.Offset.Start
+	}
 	var cachePartEtag api.CachePartETag
 
 	chunk, err := u.readChunk(ctx, size, uploadInstruct)
@@ -95,17 +99,17 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadIns
 		return cachePartEtag, fmt.Errorf("failed to read chunk: %w", err)
 	}
 
-	uploadReq, err := http.NewRequestWithContext(ctx, uploadInstruct.Method, uploadInstruct.Url, bytes.NewBuffer(chunk))
-	if err != nil {
-		return cachePartEtag, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	uploadReq.ContentLength = size
+	log.Info().Str("uploading", uploadInstruct.Url).Int64("size", int64(len(chunk))).Msg("uploading")
 
 	operation := func() (string, error) {
+		uploadReq, err := http.NewRequestWithContext(ctx, uploadInstruct.Method, uploadInstruct.Url, bytes.NewBuffer(chunk))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+
 		resp, err := u.client.Do(uploadReq)
 		if err != nil {
-			return "", fmt.Errorf("failed to upload file: %w", err)
+			return "", fmt.Errorf("failed to do upload file: %w", err)
 		}
 
 		if resp.StatusCode == http.StatusBadRequest ||
@@ -129,7 +133,12 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadIns
 	}
 
 	cachePartEtag.Etag = etag
-	cachePartEtag.Part = uploadInstruct.Offset.Part
+	cachePartEtag.Part = 1
+	if uploadInstruct.Offset != nil {
+		cachePartEtag.Part = uploadInstruct.Offset.Part
+	}
+
+	log.Info().Str("etag", etag).Int32("part", cachePartEtag.Part).Msg("uploaded")
 
 	return cachePartEtag, nil
 }
@@ -163,4 +172,12 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct api
 	}
 
 	return buf, nil
+}
+
+func sortTags(tags []api.CachePartETag) []api.CachePartETag {
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].Part < tags[j].Part
+	})
+
+	return tags
 }

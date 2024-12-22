@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,7 +15,7 @@ import (
 )
 
 const (
-	MinPartSize       int64         = 5 * 1024 * 1024 // 5MB minimum
+	MinPartSize       int64         = 10 * 1024 * 1024 // 5MB minimum
 	DefaultExpiration time.Duration = 60 * time.Minute
 )
 
@@ -36,13 +38,15 @@ func NewPresigner(s3client *s3.Client, cfg Config) *Presigner {
 // GenerateFileUploadInstructions generates the necessary instructions for uploading a file to S3, including presigned URLs and multipart upload details.
 // If the file size is less than the minimum multipart upload part size, a single presigned PUT URL is returned.
 // Otherwise, the function calculates the necessary offsets for a multipart upload and returns the presigned URLs for each part.
-func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key string, totalSize int64) (*UploadInstructionsResp, error) {
+func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEntry api.CacheEntry, totalSize int64) (*UploadInstructionsResp, error) {
 	// minimum multipart upload part size is 5 MB
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignPutObject(ctx, &s3.PutObjectInput{
-			Bucket: aws.String(p.cfg.CacheBucket),
-			Key:    aws.String(key),
+			Bucket:         aws.String(p.cfg.CacheBucket),
+			Key:            aws.String(cacheEntry.Key),
+			ChecksumSHA256: aws.String(convertSha256ToBase64(cacheEntry.Sha256sum)),
+			ContentType:    aws.String(compressionToContentType(cacheEntry.Compression)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -62,8 +66,9 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key stri
 	}
 
 	createMultiResp, err := p.s3client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
-		Bucket: aws.String(p.cfg.CacheBucket),
-		Key:    aws.String(key),
+		Bucket:      aws.String(p.cfg.CacheBucket),
+		Key:         aws.String(cacheEntry.Key),
+		ContentType: aws.String(compressionToContentType(cacheEntry.Compression)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart upload: %w", err)
@@ -76,10 +81,11 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key stri
 
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket:     aws.String(p.cfg.CacheBucket),
-			Key:        aws.String(key),
-			PartNumber: aws.Int32(offset.Part),
-			UploadId:   createMultiResp.UploadId,
+			Bucket:         aws.String(p.cfg.CacheBucket),
+			Key:            aws.String(cacheEntry.Key),
+			PartNumber:     aws.Int32(offset.Part),
+			UploadId:       createMultiResp.UploadId,
+			ChecksumSHA256: aws.String(convertSha256ToBase64(cacheEntry.Sha256sum)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -209,4 +215,21 @@ func calculateOffsets(totalSize int64, partSize int64) []offset {
 		End:   totalSize,
 	})
 	return offsets
+}
+
+func compressionToContentType(compression string) string {
+	switch compression {
+	case "zip":
+		return "application/zip"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+func convertSha256ToBase64(sha256 string) string {
+	decoded, err := hex.DecodeString(sha256)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(decoded)
 }

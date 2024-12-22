@@ -3,11 +3,10 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
@@ -25,22 +24,14 @@ type Cache struct {
 	cfg       Config
 }
 
-func NewCache(ctx context.Context, cfg Config) (*Cache, error) {
-	awscfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	s3client := s3.NewFromConfig(awscfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to register jwk cache: %w", err)
-	}
+func NewCache(ctx context.Context, cfg Config) *Cache {
+	s3client := cfg.GetS3Client()
 
 	return &Cache{
 		s3client:  s3client,
 		presigner: NewPresigner(s3client, cfg),
 		cfg:       cfg,
-	}, nil
+	}
 }
 
 func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
@@ -59,7 +50,7 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 		Str("Bucket", ca.cfg.CacheBucket).
 		Msg("presign upload request")
 
-	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry.Key, cacheEntryReq.CacheEntry.FileSize)
+	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry, cacheEntryReq.CacheEntry.FileSize)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to presign upload")
 		return c.JSON(http.StatusInternalServerError, api.Error{
@@ -89,27 +80,40 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 
 	log.Ctx(ctx).Info().Any("cacheEntryReq", cacheEntryReq).Msg("cache entry update request")
 
-	res, err := ca.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
-		Bucket:   aws.String(ca.cfg.CacheBucket),
-		Key:      aws.String(cacheEntryReq.Key),
-		UploadId: aws.String(cacheEntryReq.Id),
-		MultipartUpload: &types.CompletedMultipartUpload{
-			Parts: []types.CompletedPart{
-				{
-					ETag:       aws.String(cacheEntryReq.MultipartEtags[0].Etag),
-					PartNumber: aws.Int32(cacheEntryReq.MultipartEtags[0].Part),
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to update cache entry")
-		return c.JSON(http.StatusInternalServerError, api.Error{
-			Message: "failed to update cache entry",
-		})
-	}
+	// TODO: we need a way to record uploads which can't use multipart uploads
+	if cacheEntryReq.Id != "" {
 
-	log.Ctx(ctx).Info().Any("res", res).Msg("cache entry updated")
+		// sort the parts by part number
+		sort.Slice(cacheEntryReq.MultipartEtags, func(i, j int) bool {
+			return cacheEntryReq.MultipartEtags[i].Part < cacheEntryReq.MultipartEtags[j].Part
+		})
+
+		parts := make([]types.CompletedPart, 0, len(cacheEntryReq.MultipartEtags))
+		for _, part := range cacheEntryReq.MultipartEtags {
+			log.Info().Int32("part", part.Part).Msg("part")
+			parts = append(parts, types.CompletedPart{
+				ETag:       aws.String(part.Etag),
+				PartNumber: aws.Int32(part.Part),
+			})
+		}
+
+		res, err := ca.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+			Bucket:   aws.String(ca.cfg.CacheBucket),
+			Key:      aws.String(cacheEntryReq.Key),
+			UploadId: aws.String(cacheEntryReq.Id),
+			MultipartUpload: &types.CompletedMultipartUpload{
+				Parts: parts,
+			},
+		})
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to update cache entry")
+			return c.JSON(http.StatusInternalServerError, api.Error{
+				Message: "failed to update cache entry",
+			})
+		}
+
+		log.Ctx(ctx).Info().Any("res", res).Msg("cache entry updated")
+	}
 
 	id := uuid.New().String()
 
