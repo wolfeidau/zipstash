@@ -159,7 +159,6 @@ components:
       required:
         - url
         - method
-        - key
       properties:
         url:
           type: string
@@ -167,16 +166,13 @@ components:
         method:
           type: string
           description: HTTP method
-        key:
-          type: string
-          description: Key of the cache entry
-          minLength: 1
         offset:
           $ref: '#/components/schemas/Offset'
     CacheEntryCreateResponse:
       required:
         - id
         - upload_instructions
+        - multipart
       properties:
         id:
           type: string
@@ -185,6 +181,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CacheUploadInstruction'
+        multipart:
+          type: boolean
     CachePartETag:
       required:
         - part
@@ -231,7 +229,6 @@ components:
       required:
         - url
         - method
-        - key
       properties:
         url:
           type: string
@@ -239,16 +236,13 @@ components:
         method:
           type: string
           description: HTTP method
-        key:
-          type: string
-          description: Key of the cache entry
-          minLength: 1
         offset:
           $ref: '#/components/schemas/Offset'
     CacheEntryGetResponse:
       required:
         - cache_entry
         - download_instructions
+        - multipart
       properties:
         cache_entry:
           $ref: '#/components/schemas/CacheEntry'
@@ -256,6 +250,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CacheDownloadInstruction'
+        multipart:
+          type: boolean
     Error:
       required:
         - code

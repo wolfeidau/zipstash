@@ -2,13 +2,15 @@ package commands
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/cache-service/internal/uploader"
 	"github.com/wolfeidau/cache-service/pkg/api"
 )
 
@@ -16,11 +18,13 @@ type ClientCmd struct {
 	Endpoint  string `help:"endpoint to call" default:"http://localhost:8080"`
 	Token     string `help:"token to use" required:""`
 	Action    string `help:"action to perform" enum:"save,restore" required:""`
+	Key       string `help:"key to use for the cache entry" required:""`
 	CacheFile string `help:"file to save"`
+	Skip      bool   `help:"skip confirmation"`
 }
 
 func (c *ClientCmd) Run(ctx context.Context, globals *Globals) error {
-	_, span := trace.Start(ctx, "ClientCmdRun")
+	_, span := trace.Start(ctx, "ClientCmd.Run")
 	defer span.End()
 
 	switch c.Action {
@@ -34,19 +38,10 @@ func (c *ClientCmd) Run(ctx context.Context, globals *Globals) error {
 }
 
 func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
-	file, err := os.Open(c.CacheFile)
+	fileInfo, err := checkCacheFile(ctx, c.CacheFile)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return fmt.Errorf("failed to check cache file: %w", err)
 	}
-
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to stat file: %w", err)
-	}
-
-	fileName := filepath.Base(c.CacheFile)
 
 	cl, err := api.NewClientWithResponses(c.Endpoint, api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
@@ -58,10 +53,10 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 
 	createResp, err := cl.CreateCacheEntryWithResponse(ctx, "GitHubActions", api.CreateCacheEntryJSONRequestBody{
 		CacheEntry: api.CacheEntry{
-			Key:         fileName,
+			Key:         c.Key,
 			Compression: "zip",
-			FileSize:    fileInfo.Size(),
-			Sha256sum:   "8b61aa44a35df9defab3c94f6180e1b921788f252640b9856784438d71e140a8",
+			FileSize:    fileInfo.Size,
+			Sha256sum:   fileInfo.Sha256sum,
 		},
 	})
 	if err != nil {
@@ -74,49 +69,23 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 
 	fmt.Println(string(createResp.Body))
 
-	id := createResp.JSON201.Id
+	log.Info().Str("id", createResp.JSON201.Id).Msg("creating cache entry")
 
-	fmt.Println(id)
+	if c.Skip {
+		return nil
+	}
 
-	uploadInst := createResp.JSON201.UploadInstructions[0]
+	upl := uploader.NewUploader(c.CacheFile, createResp.JSON201.UploadInstructions, 20)
 
-	uploadReq, err := http.NewRequest(
-		uploadInst.Method,
-		uploadInst.Url, file)
-
+	etags, err := upl.Upload(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to upload: %w", err)
 	}
-
-	uploadReq.ContentLength = fileInfo.Size()
-
-	cacheResp, err := http.DefaultClient.Do(uploadReq)
-	if err != nil {
-		return fmt.Errorf("failed to upload file: %w", err)
-	}
-
-	defer cacheResp.Body.Close()
-
-	data, err := io.ReadAll(cacheResp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if cacheResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to upload file: %s %s", cacheResp.Status, string(data))
-	}
-
-	fmt.Println(cacheResp.Status)
 
 	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, "GitHubActions", api.CacheEntryUpdateRequest{
-		Id:  id,
-		Key: fileName,
-		MultipartEtags: []api.CachePartETag{
-			{
-				Etag: cacheResp.Header.Get("ETag"),
-				Part: 1,
-			},
-		},
+		Id:             createResp.JSON201.Id,
+		Key:            c.Key,
+		MultipartEtags: etags,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update cache entry: %w", err)
@@ -133,4 +102,36 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 
 func (c *ClientCmd) restore(ctx context.Context, globals *Globals) error {
 	return nil
+}
+
+type fileInfo struct {
+	Size      int64
+	Sha256sum string
+}
+
+func checkCacheFile(ctx context.Context, cacheFile string) (*fileInfo, error) {
+	_, span := trace.Start(ctx, "checkCacheFile")
+	defer span.End()
+
+	file, err := os.Open(cacheFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	defer file.Close()
+
+	fstat, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	sha256 := sha256.New()
+	if _, err := io.Copy(sha256, file); err != nil {
+		return nil, fmt.Errorf("failed to calculate sha256sum: %w", err)
+	}
+
+	return &fileInfo{
+		Size:      fstat.Size(),
+		Sha256sum: fmt.Sprintf("%x", sha256.Sum(nil)),
+	}, nil
 }

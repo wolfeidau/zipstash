@@ -54,10 +54,7 @@ deploy-api:
 		--tags "environment=$(STAGE)" "branch=$(BRANCH)" "application=$(APPNAME)" \
 		--stack-name $(APPNAME)-$(STAGE)-$(BRANCH)-api \
 		--parameter-overrides AppName=$(APPNAME) Stage=$(STAGE) Branch=$(BRANCH) \
-			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH} \
-			OIDCIssuer=https://token.actions.githubusercontent.com \
-			OIDCAudience=https://github.com/wolfeidau
-
+			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH}
 
 .PHONY: logs
 logs:

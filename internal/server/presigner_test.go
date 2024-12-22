@@ -27,7 +27,7 @@ func TestOffsetsForDownload(t *testing.T) {
 		},
 		{
 			name:     "14MB",
-			total:    14 * 1024 * 1024, // 10 MB
+			total:    14 * 1024 * 1024, // 14 MB
 			partSize: 5 * 1024 * 1024,  // 5 MB
 			expected: []offset{
 				{

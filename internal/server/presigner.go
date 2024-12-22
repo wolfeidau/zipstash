@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	MinUploadPartSize int64         = 1024 * 1024 * 5 // 5 MB
+	MinPartSize       int64         = 5 * 1024 * 1024 // 5MB minimum
 	DefaultExpiration time.Duration = 60 * time.Minute
 )
 
 type Presigner struct {
+	s3client        *s3.Client
 	presignS3Client *s3.PresignClient
 	cfg             Config
 }
@@ -26,15 +27,19 @@ func NewPresigner(s3client *s3.Client, cfg Config) *Presigner {
 	presignS3Client := s3.NewPresignClient(s3client)
 
 	return &Presigner{
+		s3client:        s3client,
 		presignS3Client: presignS3Client,
 		cfg:             cfg,
 	}
 }
 
-func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key string, totalSize int64) ([]api.CacheUploadInstruction, error) {
+// GenerateFileUploadInstructions generates the necessary instructions for uploading a file to S3, including presigned URLs and multipart upload details.
+// If the file size is less than the minimum multipart upload part size, a single presigned PUT URL is returned.
+// Otherwise, the function calculates the necessary offsets for a multipart upload and returns the presigned URLs for each part.
+func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key string, totalSize int64) (*UploadInstructionsResp, error) {
 	// minimum multipart upload part size is 5 MB
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
-	if totalSize < MinUploadPartSize {
+	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignPutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(p.cfg.CacheBucket),
 			Key:    aws.String(key),
@@ -46,23 +51,35 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key stri
 			return nil, fmt.Errorf("failed to presign upload: %w", err)
 		}
 
-		return []api.CacheUploadInstruction{
-			{
-				Url:    req.URL,
-				Method: http.MethodPut,
+		return &UploadInstructionsResp{
+			UploadInstructions: []api.CacheUploadInstruction{
+				{
+					Url:    req.URL,
+					Method: http.MethodPut,
+				},
 			},
 		}, nil
 	}
 
+	createMultiResp, err := p.s3client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String(p.cfg.CacheBucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create multipart upload: %w", err)
+	}
+
 	// Maximum multipart upload part size is 5 GB
 	// Maximum number of parts per upload is 10,000
-	offsets := calculateOffsets(totalSize, MinUploadPartSize)
+	offsets := calculateOffsets(totalSize, MinPartSize)
 	reqs := make([]api.CacheUploadInstruction, 0, len(offsets))
 
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket: aws.String(p.cfg.CacheBucket),
-			Key:    aws.String(key),
+			Bucket:     aws.String(p.cfg.CacheBucket),
+			Key:        aws.String(key),
+			PartNumber: aws.Int32(offset.Part),
+			UploadId:   createMultiResp.UploadId,
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -80,13 +97,21 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, key stri
 		})
 	}
 
-	return reqs, nil
+	return &UploadInstructionsResp{
+		UploadInstructions: reqs,
+		Multipart:          true,
+		MultipartUploadId:  aws.ToString(createMultiResp.UploadId),
+	}, nil
 }
 
-func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key string, totalSize int64) ([]api.CacheDownloadInstruction, error) {
+// GenerateFileDownloadInstructions generates the necessary instructions for downloading a file from the S3 cache.
+// If the file size is less than the minimum multipart upload part size, it generates a single download instruction.
+// Otherwise, it generates multiple download instructions for downloading the file in parts.
+// The returned instructions include the presigned URLs and HTTP methods to use for the downloads.
+func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key string, totalSize int64) (*DownloadInstructionsResp, error) {
 	// minimum multipart upload part size is 5 MB
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
-	if totalSize < MinUploadPartSize {
+	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(p.cfg.CacheBucket),
 			Key:    aws.String(key),
@@ -97,17 +122,19 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key st
 		if err != nil {
 			return nil, fmt.Errorf("failed to presign upload: %w", err)
 		}
-		return []api.CacheDownloadInstruction{
-			{
-				Url:    req.URL,
-				Method: http.MethodGet,
+		return &DownloadInstructionsResp{
+			DownloadInstructions: []api.CacheDownloadInstruction{
+				{
+					Url:    req.URL,
+					Method: http.MethodGet,
+				},
 			},
 		}, nil
 	}
 
 	// Maximum multipart upload part size is 5 GB
 	// Maximum number of parts per upload is 10,000
-	offsets := calculateOffsets(totalSize, MinUploadPartSize)
+	offsets := calculateOffsets(totalSize, MinPartSize)
 	reqs := make([]api.CacheDownloadInstruction, 0, len(offsets))
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
@@ -131,7 +158,10 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key st
 		})
 	}
 
-	return reqs, nil
+	return &DownloadInstructionsResp{
+		DownloadInstructions: reqs,
+		Multipart:            true,
+	}, nil
 }
 
 type offset struct {
@@ -140,10 +170,25 @@ type offset struct {
 	End   int64
 }
 
-// calculate the offsets for range queries for a given total size and part size
+type UploadInstructionsResp struct {
+	UploadInstructions []api.CacheUploadInstruction
+	Multipart          bool
+	MultipartUploadId  string
+}
+
+type DownloadInstructionsResp struct {
+	DownloadInstructions []api.CacheDownloadInstruction
+	Multipart            bool
+}
+
+// calculateOffsets calculates the offsets for range queries for a given total size and part size.
+// It returns a slice of offset structs, where each offset represents a part of the total size
+// that can be downloaded or uploaded separately.
+// The part number starts at 1 in S3 multipart uploads.
+// The last part may have a different size than the other parts.
 func calculateOffsets(totalSize int64, partSize int64) []offset {
-	offsets := []offset{}
-	i := int32(1)
+	offsets := make([]offset, 0, (totalSize/partSize)+1)
+	i := int32(1) // part number starts at 1 in s3 multipart uploads
 	start := int64(0)
 	end := partSize
 	for end < totalSize {
@@ -159,6 +204,7 @@ func calculateOffsets(totalSize int64, partSize int64) []offset {
 
 	// add the last part
 	offsets = append(offsets, offset{
+		Part:  i,
 		Start: start,
 		End:   totalSize,
 	})

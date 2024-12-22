@@ -18,7 +18,7 @@ import (
 )
 
 type ServerCmd struct {
-	Listen      string `help:"listen address" default:":8080"`
+	Listen      string `help:"listen address" default:"localhost:8080"`
 	JWKSURL     string `help:"jwks url" default:"https://token.actions.githubusercontent.com/.well-known/jwks"`
 	CacheBucket string `help:"bucket to store cache" env:"CACHE_BUCKET"`
 	Local       bool   `help:"run in local mode"`
@@ -63,7 +63,7 @@ func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	log.Info().Msgf("listening on %s", s.Listen)
+	log.Info().Str("addr", s.Listen).Msg("starting server")
 
 	return svr.ListenAndServe()
 }

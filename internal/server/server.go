@@ -59,18 +59,7 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 		Str("Bucket", ca.cfg.CacheBucket).
 		Msg("presign upload request")
 
-	createMultiResp, err := ca.s3client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
-		Bucket: aws.String(ca.cfg.CacheBucket),
-		Key:    aws.String(cacheEntryReq.CacheEntry.Key),
-	})
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to create multipart upload")
-		return c.JSON(http.StatusInternalServerError, api.Error{
-			Message: "failed to create cache entry",
-		})
-	}
-
-	uploadInstructions, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry.Key, cacheEntryReq.CacheEntry.FileSize)
+	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry.Key, cacheEntryReq.CacheEntry.FileSize)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to presign upload")
 		return c.JSON(http.StatusInternalServerError, api.Error{
@@ -81,8 +70,9 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 	log.Ctx(ctx).Info().Msg("presigned upload request")
 
 	return c.JSON(http.StatusCreated, api.CacheEntryCreateResponse{
-		Id:                 aws.ToString(createMultiResp.UploadId),
-		UploadInstructions: uploadInstructions,
+		Id:                 uploadInstructs.MultipartUploadId,
+		UploadInstructions: uploadInstructs.UploadInstructions,
+		Multipart:          uploadInstructs.Multipart,
 	})
 }
 
@@ -150,7 +140,7 @@ func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error 
 
 	log.Ctx(ctx).Info().Any("res", res).Msg("cache entry retrieved")
 
-	downloadInstructions, err := ca.presigner.GenerateFileDownloadInstructions(ctx, key, aws.ToInt64(res.ContentLength))
+	downloadInstructs, err := ca.presigner.GenerateFileDownloadInstructions(ctx, key, aws.ToInt64(res.ContentLength))
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to presign download")
 		return c.JSON(http.StatusInternalServerError, api.Error{
@@ -163,6 +153,7 @@ func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error 
 			Key:      key,
 			FileSize: aws.ToInt64(res.ContentLength),
 		},
-		DownloadInstructions: downloadInstructions,
+		DownloadInstructions: downloadInstructs.DownloadInstructions,
+		Multipart:            downloadInstructs.Multipart,
 	})
 }

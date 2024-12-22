@@ -21,12 +21,6 @@ Parameters:
   ContainerImageUri:
     Description: The container image URI which hosts the images.
     Type: String
-  OIDCIssuer:
-    Description: The OIDC Issuer URL.
-    Type: String
-  OIDCAudience:
-    Description: The OIDC Audience.
-    Type: String
 
 Outputs:
   HttpAPIURL:
@@ -96,16 +90,6 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       FailOnWarnings: True
-      Auth:
-        Authorizers:
-          OAuth2Authorizer:
-            IdentitySource:
-              - '$request.header.Authorization'
-            JwtConfiguration:
-              Audience:
-                - !Ref OIDCAudience
-              Issuer: !Ref OIDCIssuer
-        DefaultAuthorizer: OAuth2Authorizer
       DefaultRouteSettings:
         ThrottlingBurstLimit: 10
         ThrottlingRateLimit: 5
@@ -134,7 +118,6 @@ Resources:
         Command: ['lambda-server']
       Environment:
         Variables:
-          OIDC_ISSUER: !Ref OIDCIssuer
           CACHE_BUCKET: !Ref CacheBucket
       Policies:
         - S3ReadPolicy:
