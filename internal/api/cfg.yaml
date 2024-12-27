@@ -5,4 +5,3 @@ generate:
   models: true
   echo-server: true
   strict-server: false
-  client: true

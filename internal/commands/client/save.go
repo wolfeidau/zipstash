@@ -1,4 +1,4 @@
-package commands
+package client
 
 import (
 	"context"
@@ -9,41 +9,42 @@ import (
 	"os"
 
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"github.com/wolfeidau/cache-service/internal/commands"
 	"github.com/wolfeidau/cache-service/internal/trace"
 	"github.com/wolfeidau/cache-service/internal/uploader"
-	"github.com/wolfeidau/cache-service/pkg/api"
+	"github.com/wolfeidau/cache-service/pkg/client"
 )
 
-type ClientCmd struct {
-	Endpoint  string `help:"endpoint to call" default:"http://localhost:8080"`
+type SaveCmd struct {
+	Endpoint  string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
 	Token     string `help:"token to use" required:""`
-	Action    string `help:"action to perform" enum:"save,restore" required:""`
-	Key       string `help:"key to use for the cache entry" required:""`
+	Key       string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
+	Path      string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	CacheFile string `help:"file to save"`
 	Skip      bool   `help:"skip confirmation"`
 }
 
-func (c *ClientCmd) Run(ctx context.Context, globals *Globals) error {
-	_, span := trace.Start(ctx, "ClientCmd.Run")
+func (c *SaveCmd) Run(ctx context.Context, globals *commands.Globals) error {
+	_, span := trace.Start(ctx, "SaveCmd.Run")
 	defer span.End()
 
-	switch c.Action {
-	case "save":
-		return c.save(ctx, globals)
-	case "restore":
-		return c.restore(ctx, globals)
-	}
-
-	return nil
+	return c.save(ctx, globals)
 }
 
-func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
+func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
+	_, span := trace.Start(ctx, "SaveCmd.save")
+	defer span.End()
+
 	fileInfo, err := checkCacheFile(ctx, c.CacheFile)
 	if err != nil {
 		return fmt.Errorf("failed to check cache file: %w", err)
 	}
 
-	cl, err := api.NewClientWithResponses(c.Endpoint, api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
+	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+
+	cl, err := client.NewClientWithResponses(c.Endpoint, client.WithHTTPClient(httpClient), client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 		return nil
 	}))
@@ -51,8 +52,8 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	createResp, err := cl.CreateCacheEntryWithResponse(ctx, "GitHubActions", api.CreateCacheEntryJSONRequestBody{
-		CacheEntry: api.CacheEntry{
+	createResp, err := cl.CreateCacheEntryWithResponse(ctx, "GitHubActions", client.CreateCacheEntryJSONRequestBody{
+		CacheEntry: client.CacheEntry{
 			Key:         c.Key,
 			Compression: "zip",
 			FileSize:    fileInfo.Size,
@@ -75,7 +76,7 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 		return nil
 	}
 
-	upl := uploader.NewUploader(c.CacheFile, createResp.JSON201.UploadInstructions, 20)
+	upl := uploader.NewUploader(ctx, c.CacheFile, createResp.JSON201.UploadInstructions, 20)
 
 	etags, err := upl.Upload(ctx)
 	if err != nil {
@@ -84,7 +85,7 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 
 	log.Info().Str("id", createResp.JSON201.Id).Int("len", len(etags)).Msg("updating cache entry")
 
-	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, "GitHubActions", api.CacheEntryUpdateRequest{
+	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, "GitHubActions", client.CacheEntryUpdateRequest{
 		Id:             createResp.JSON201.Id,
 		Key:            c.Key,
 		MultipartEtags: etags,
@@ -99,10 +100,6 @@ func (c *ClientCmd) save(ctx context.Context, globals *Globals) error {
 
 	fmt.Println(string(updateResp.Body))
 
-	return nil
-}
-
-func (c *ClientCmd) restore(ctx context.Context, globals *Globals) error {
 	return nil
 }
 

@@ -9,7 +9,7 @@ import (
 	oapi_middleware "github.com/oapi-codegen/echo-middleware"
 	echo_middleware "github.com/wolfeidau/echo-middleware"
 
-	"github.com/wolfeidau/cache-service/pkg/api"
+	"github.com/wolfeidau/cache-service/internal/api"
 )
 
 type Config struct {

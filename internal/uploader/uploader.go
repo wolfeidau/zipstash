@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sort"
 	"sync"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"github.com/wolfeidau/cache-service/internal/trace"
-	"github.com/wolfeidau/cache-service/pkg/api"
+	"github.com/wolfeidau/cache-service/pkg/client"
 )
 
 // Uploader uses go routines to upload files in parallel with a limit of 20 concurrent uploads.
@@ -24,29 +25,31 @@ import (
 type Uploader struct {
 	filePath        string
 	client          *http.Client
-	uploadInstructs []api.CacheUploadInstruction
+	uploadInstructs []client.CacheUploadInstruction
 	limit           int
 	errors          chan error
 	done            chan struct{}
 }
 
-func NewUploader(filePath string, uploadInstructs []api.CacheUploadInstruction, limit int) *Uploader {
+func NewUploader(ctx context.Context, filePath string, uploadInstructs []client.CacheUploadInstruction, limit int) *Uploader {
+	_, span := trace.Start(ctx, "NewUploader")
+	defer span.End()
 	return &Uploader{
 		filePath:        filePath,
 		uploadInstructs: uploadInstructs,
-		client:          http.DefaultClient,
+		client:          &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		limit:           limit,
 		errors:          make(chan error),
 		done:            make(chan struct{}),
 	}
 }
 
-func (u *Uploader) Upload(ctx context.Context) ([]api.CachePartETag, error) {
+func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 	_, span := trace.Start(ctx, "Uploader.Upload")
 	defer span.End()
 
 	var mu sync.Mutex
-	etags := make([]api.CachePartETag, 0, len(u.uploadInstructs))
+	etags := make([]client.CachePartETag, 0, len(u.uploadInstructs))
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(u.uploadInstructs))
@@ -54,7 +57,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]api.CachePartETag, error) {
 
 	for _, uploadInstruct := range u.uploadInstructs {
 		sem <- struct{}{}
-		go func(uploadInstruct api.CacheUploadInstruction) {
+		go func(uploadInstruct client.CacheUploadInstruction) {
 			defer func() {
 				<-sem
 				wg.Done()
@@ -84,7 +87,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]api.CachePartETag, error) {
 	}
 }
 
-func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadInstruction) (api.CachePartETag, error) {
+func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUploadInstruction) (client.CachePartETag, error) {
 	_, span := trace.Start(ctx, "Uploader.upload")
 	defer span.End()
 	size := int64(0)
@@ -92,7 +95,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadIns
 	if uploadInstruct.Offset != nil {
 		size = uploadInstruct.Offset.End - uploadInstruct.Offset.Start
 	}
-	var cachePartEtag api.CachePartETag
+	var cachePartEtag client.CachePartETag
 
 	chunk, err := u.readChunk(ctx, size, uploadInstruct)
 	if err != nil {
@@ -101,35 +104,9 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadIns
 
 	log.Info().Str("uploading", uploadInstruct.Url).Int64("size", int64(len(chunk))).Msg("uploading")
 
-	operation := func() (string, error) {
-		uploadReq, err := http.NewRequestWithContext(ctx, uploadInstruct.Method, uploadInstruct.Url, bytes.NewBuffer(chunk))
-		if err != nil {
-			return "", fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := u.client.Do(uploadReq)
-		if err != nil {
-			return "", fmt.Errorf("failed to do upload file: %w", err)
-		}
-
-		if resp.StatusCode == http.StatusBadRequest ||
-			resp.StatusCode == http.StatusForbidden ||
-			resp.StatusCode == http.StatusLengthRequired {
-			return "", backoff.Permanent(fmt.Errorf("failed to upload file: %s", resp.Status))
-		}
-
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("failed to upload file: %s", resp.Status)
-		}
-
-		return resp.Header.Get("ETag"), nil
-	}
-
-	etag, err := backoff.Retry(ctx, operation,
-		backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
+	etag, err := u.uploadChunk(ctx, uploadInstruct, chunk)
 	if err != nil {
-		return cachePartEtag, fmt.Errorf("failed to upload file: %w", err)
+		return cachePartEtag, fmt.Errorf("failed to upload chunk: %w", err)
 	}
 
 	cachePartEtag.Etag = etag
@@ -143,7 +120,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct api.CacheUploadIns
 	return cachePartEtag, nil
 }
 
-func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct api.CacheUploadInstruction) ([]byte, error) {
+func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct client.CacheUploadInstruction) ([]byte, error) {
 	_, span := trace.Start(ctx, "Uploader.readChunk")
 	defer span.End()
 
@@ -174,10 +151,35 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct api
 	return buf, nil
 }
 
-func sortTags(tags []api.CachePartETag) []api.CachePartETag {
-	sort.Slice(tags, func(i, j int) bool {
-		return tags[i].Part < tags[j].Part
-	})
+func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheUploadInstruction, chunk []byte) (string, error) {
+	_, span := trace.Start(ctx, "Uploader.uploadChunk")
+	defer span.End()
 
-	return tags
+	operation := func() (string, error) {
+		uploadReq, err := http.NewRequestWithContext(ctx, uploadInstruct.Method, uploadInstruct.Url, bytes.NewBuffer(chunk))
+		if err != nil {
+			return "", fmt.Errorf("failed to create request: %w", err)
+		}
+
+		resp, err := u.client.Do(uploadReq)
+		if err != nil {
+			return "", fmt.Errorf("failed to do upload file: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusBadRequest ||
+			resp.StatusCode == http.StatusForbidden ||
+			resp.StatusCode == http.StatusLengthRequired {
+			return "", backoff.Permanent(fmt.Errorf("failed to upload file: %s", resp.Status))
+		}
+
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("failed to upload file: %s", resp.Status)
+		}
+
+		return resp.Header.Get("ETag"), nil
+	}
+
+	return backoff.Retry(ctx, operation,
+		backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
 }

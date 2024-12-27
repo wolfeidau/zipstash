@@ -13,7 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 
-	"github.com/wolfeidau/cache-service/pkg/api"
+	"github.com/wolfeidau/cache-service/internal/api"
 )
 
 var _ api.ServerInterface = (*Cache)(nil)

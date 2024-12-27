@@ -97,6 +97,7 @@ components:
         - file_size
         - compression
         - sha256sum
+        - paths
       properties:
         key:
           type: string
@@ -123,6 +124,12 @@ components:
           type: string
           description: URL to upload the cache entry
           minLength: 1
+        paths:
+          type: array
+          description: Paths to upload the cache entry
+          minItems: 1
+          items:
+            type: string
     CacheEntryCreateRequest:
       required:
       - multipart_supported

@@ -8,6 +8,7 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/wolfeidau/cache-service/internal/commands"
+	"github.com/wolfeidau/cache-service/internal/commands/client"
 	"github.com/wolfeidau/cache-service/internal/trace"
 )
 
@@ -19,7 +20,7 @@ var (
 		Version      kong.VersionFlag
 		Server       commands.ServerCmd       `cmd:"" help:"start a server."`
 		LambdaServer commands.LambdaServerCmd `cmd:"" help:"start a server in aws lambda."`
-		Client       commands.ClientCmd       `cmd:"" help:"run a test client."`
+		Client       client.ClientCmd         `cmd:"" help:"run a client."`
 	}
 )
 
