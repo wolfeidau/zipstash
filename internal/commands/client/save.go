@@ -2,15 +2,16 @@ package client
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/wolfeidau/cache-service/internal/archive"
 	"github.com/wolfeidau/cache-service/internal/commands"
 	"github.com/wolfeidau/cache-service/internal/trace"
 	"github.com/wolfeidau/cache-service/internal/uploader"
@@ -18,29 +19,34 @@ import (
 )
 
 type SaveCmd struct {
-	Endpoint  string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
-	Token     string `help:"token to use" required:""`
-	Key       string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
-	Path      string `help:"Path list for a cache entry." env:"INPUT_PATH"`
-	CacheFile string `help:"file to save"`
-	Skip      bool   `help:"skip confirmation"`
+	Endpoint string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
+	Token    string `help:"token to use" required:""`
+	Key      string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
+	Path     string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 }
 
 func (c *SaveCmd) Run(ctx context.Context, globals *commands.Globals) error {
-	_, span := trace.Start(ctx, "SaveCmd.Run")
+	ctx, span := trace.Start(ctx, "SaveCmd.Run")
 	defer span.End()
 
 	return c.save(ctx, globals)
 }
 
 func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
-	_, span := trace.Start(ctx, "SaveCmd.save")
+	ctx, span := trace.Start(ctx, "SaveCmd.save")
 	defer span.End()
 
-	fileInfo, err := checkCacheFile(ctx, c.CacheFile)
+	paths, err := checkPath(c.Path)
 	if err != nil {
-		return fmt.Errorf("failed to check cache file: %w", err)
+		return fmt.Errorf("failed to check path: %w", err)
 	}
+
+	fileInfo, err := archive.BuildArchive(ctx, paths, c.Key)
+	if err != nil {
+		return fmt.Errorf("failed to build archive: %w", err)
+	}
+
+	log.Info().Any("fileInfo", fileInfo).Msg("archive info")
 
 	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
@@ -58,6 +64,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 			Compression: "zip",
 			FileSize:    fileInfo.Size,
 			Sha256sum:   fileInfo.Sha256sum,
+			Paths:       paths,
 		},
 	})
 	if err != nil {
@@ -68,15 +75,9 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to create cache entry: %s", createResp.JSONDefault.Message)
 	}
 
-	fmt.Println(string(createResp.Body))
-
 	log.Info().Str("id", createResp.JSON201.Id).Msg("creating cache entry")
 
-	if c.Skip {
-		return nil
-	}
-
-	upl := uploader.NewUploader(ctx, c.CacheFile, createResp.JSON201.UploadInstructions, 20)
+	upl := uploader.NewUploader(ctx, fileInfo.ArchivePath, createResp.JSON201.UploadInstructions, 20)
 
 	etags, err := upl.Upload(ctx)
 	if err != nil {
@@ -98,39 +99,28 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to update cache entry: %s", updateResp.JSONDefault.Message)
 	}
 
-	fmt.Println(string(updateResp.Body))
+	log.Info().Str("id", createResp.JSON201.Id).Msg("updated cache entry")
 
 	return nil
 }
 
-type fileInfo struct {
-	Size      int64
-	Sha256sum string
-}
-
-func checkCacheFile(ctx context.Context, cacheFile string) (*fileInfo, error) {
-	_, span := trace.Start(ctx, "checkCacheFile")
-	defer span.End()
-
-	file, err := os.Open(cacheFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+func checkPath(path string) ([]string, error) {
+	files := strings.Fields(path)
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no paths provided")
 	}
 
-	defer file.Close()
+	for i, file := range files {
+		if strings.HasPrefix(file, "~/") {
+			homedir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get home directory: %w", err)
+			}
 
-	fstat, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("failed to stat file: %w", err)
+			// update the path to be the full path
+			files[i] = filepath.Join(homedir, file[2:])
+		}
 	}
 
-	sha256 := sha256.New()
-	if _, err := io.Copy(sha256, file); err != nil {
-		return nil, fmt.Errorf("failed to calculate sha256sum: %w", err)
-	}
-
-	return &fileInfo{
-		Size:      fstat.Size(),
-		Sha256sum: fmt.Sprintf("%x", sha256.Sum(nil)),
-	}, nil
+	return files, nil
 }

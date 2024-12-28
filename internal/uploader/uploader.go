@@ -45,7 +45,7 @@ func NewUploader(ctx context.Context, filePath string, uploadInstructs []client.
 }
 
 func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
-	_, span := trace.Start(ctx, "Uploader.Upload")
+	ctx, span := trace.Start(ctx, "Uploader.Upload")
 	defer span.End()
 
 	var mu sync.Mutex
@@ -88,7 +88,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 }
 
 func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUploadInstruction) (client.CachePartETag, error) {
-	_, span := trace.Start(ctx, "Uploader.upload")
+	ctx, span := trace.Start(ctx, "Uploader.upload")
 	defer span.End()
 	size := int64(0)
 
@@ -152,7 +152,7 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct cli
 }
 
 func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheUploadInstruction, chunk []byte) (string, error) {
-	_, span := trace.Start(ctx, "Uploader.uploadChunk")
+	ctx, span := trace.Start(ctx, "Uploader.uploadChunk")
 	defer span.End()
 
 	operation := func() (string, error) {

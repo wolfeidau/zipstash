@@ -526,7 +526,7 @@ func (r UpdateCacheEntryResponse) StatusCode() int {
 type GetCacheEntryByKeyResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON201      *CacheEntryGetResponse
+	JSON200      *CacheEntryGetResponse
 	JSONDefault  *Error
 }
 
@@ -669,12 +669,12 @@ func ParseGetCacheEntryByKeyResponse(rsp *http.Response) (*GetCacheEntryByKeyRes
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest CacheEntryGetResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON201 = &dest
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error
@@ -708,8 +708,8 @@ var swaggerSpec = []string{
 	"i9R+PriZo9EbHT+WAYI2dPy5q9FvLFt9C9THH9jSbBctBxpRwTIbTL1Mm2KgziGqvukCE3V55zeDwbcy",
 	"LXyaCAThqDOlFjxx5AdfjK8N66Ne1vzbY2RZ+rvypdnpN4qHrwhbdQwH21bWd9OaCvnGcV4P3q3+716c",
 	"snyBfxlNX6ACnHIBTwoShJRAtSeiJs8yZuetyjyGsNYoYHM4D1jNN83vyGrteSxotfgVYf9XVvNB9axW",
-	"RsF6N1g+QOGq3gwCTjwHXMv1tvgA/7gXo2XoKD+K7unoVy9lzQ+yF5qrUx7+LaY6B2wbikwKYkW3ufp7",
-	"AAAA//9EP31QiBQAAA==",
+	"RsF6N1g+QOGq3gwCTjwHXMv1tvgA/7gXo2XoKD+K7unoV/dX84PshebqlId/i6nOAduGIpOCWNFtrv4e",
+	"AAD//5lM/+CIFAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

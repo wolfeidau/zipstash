@@ -77,7 +77,7 @@ paths:
           schema:
             type: string
       responses:
-        '201':
+        '200':
           description: cache response with cache entry
           content:
             application/json:
