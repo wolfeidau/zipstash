@@ -1,6 +1,10 @@
 package server
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestOffsetsForDownload(t *testing.T) {
 	tests := []struct {
@@ -21,7 +25,7 @@ func TestOffsetsForDownload(t *testing.T) {
 				}, {
 					Part:  2,
 					Start: 5*1024*1024 + 1,
-					End:   10 * 1024 * 1024,
+					End:   10*1024*1024 - 1,
 				},
 			},
 		},
@@ -42,7 +46,7 @@ func TestOffsetsForDownload(t *testing.T) {
 				{
 					Part:  3,
 					Start: 10*1024*1024 + 1,
-					End:   14 * 1024 * 1024,
+					End:   14*1024*1024 - 1,
 				},
 			},
 		},
@@ -50,15 +54,18 @@ func TestOffsetsForDownload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			assert := require.New(t)
 			offsets := calculateOffsets(tt.total, tt.partSize)
 			if len(offsets) != len(tt.expected) {
 				t.Errorf("calculateOffsetsForDownload() = %v, want %v", offsets, tt.expected)
 			}
+
 			for i, offset := range offsets {
-				if offset.Start != tt.expected[i].Start || offset.End != tt.expected[i].End {
-					t.Errorf("calculateOffsetsForDownload() = %v, want %v", offsets, tt.expected)
-				}
+				assert.Equal(tt.expected[i].Part, offset.Part)
+				assert.Equal(tt.expected[i].Start, offset.Start)
+				assert.Equal(tt.expected[i].End, offset.End)
 			}
+
 		})
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/wolfeidau/cache-service/internal/archive"
 	"github.com/wolfeidau/cache-service/internal/commands"
@@ -48,12 +47,8 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 
 	log.Info().Any("fileInfo", fileInfo).Msg("archive info")
 
-	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+	cl, err := newClient(c.Endpoint, c.Token)
 
-	cl, err := client.NewClientWithResponses(c.Endpoint, client.WithHTTPClient(httpClient), client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
-		return nil
-	}))
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}

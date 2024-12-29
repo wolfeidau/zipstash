@@ -48,6 +48,7 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 	log.Ctx(ctx).Info().
 		Str("Key", cacheEntryReq.CacheEntry.Key).
 		Str("Bucket", ca.cfg.CacheBucket).
+		Int64("FileSize", cacheEntryReq.CacheEntry.FileSize).
 		Msg("presign upload request")
 
 	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry, cacheEntryReq.CacheEntry.FileSize)

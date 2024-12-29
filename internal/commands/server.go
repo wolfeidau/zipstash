@@ -57,7 +57,7 @@ func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
 		s3ClientFunc = func() *s3.Client {
 
 			return s3.New(s3.Options{
-				ClientLogMode:      aws.LogRetries | aws.LogRequest | aws.LogResponse,
+				// ClientLogMode:      aws.LogRetries | aws.LogRequest | aws.LogResponse,
 				UsePathStyle:       true,
 				Logger:             logging.NewStandardLogger(os.Stdout),
 				EndpointResolverV2: &Resolver{URL: endpointURL},

@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/rs/zerolog/log"
 
 	"github.com/wolfeidau/cache-service/internal/api"
 )
@@ -73,6 +74,8 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart upload: %w", err)
 	}
+
+	log.Info().Int64("totalSize", totalSize).Int64("MinPartSize", MinPartSize).Msg("multipart upload")
 
 	// Maximum multipart upload part size is 5 GB
 	// Maximum number of parts per upload is 10,000
@@ -203,17 +206,25 @@ func calculateOffsets(totalSize int64, partSize int64) []offset {
 			Start: start,
 			End:   end,
 		})
+
+		log.Info().Int32("part", i).Int64("start", start).Int64("end", end).Int64("size", end-start+1).Msg("part")
+
 		start = end + 1
 		end += partSize
 		i++
 	}
 
+	end = totalSize - 1
+
 	// add the last part
 	offsets = append(offsets, offset{
 		Part:  i,
 		Start: start,
-		End:   totalSize,
+		End:   end,
 	})
+
+	log.Info().Int32("part", i).Int64("start", start).Int64("end", end).Int64("size", end-start+1).Msg("last part")
+
 	return offsets
 }
 
