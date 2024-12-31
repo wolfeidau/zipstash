@@ -17,15 +17,6 @@ const (
 	skipOwnership = true
 )
 
-func getChrootPath(path string) (string, error) {
-	if filepath.IsAbs(path) {
-		return os.UserHomeDir()
-	}
-
-	// get the current working directory
-	return os.Getwd()
-}
-
 // isUnderHome checks if the given path is under the user's home directory.
 // It first gets the absolute path of the given path, then gets the user's
 // home directory, and finally checks if the absolute path starts with the

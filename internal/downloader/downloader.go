@@ -97,7 +97,9 @@ func (d *Downloader) download(ctx context.Context, downloadInstruct client.Cache
 			return download, fmt.Errorf("failed to create request: %w", err)
 		}
 
-		downloadReq.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", downloadInstruct.Offset.Start, downloadInstruct.Offset.End))
+		if downloadInstruct.Offset != nil {
+			downloadReq.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", downloadInstruct.Offset.Start, downloadInstruct.Offset.End))
+		}
 
 		resp, err := d.client.Do(downloadReq)
 		if err != nil {
@@ -111,7 +113,12 @@ func (d *Downloader) download(ctx context.Context, downloadInstruct client.Cache
 			return download, fmt.Errorf("failed to download file: %s", resp.Status)
 		}
 
-		f, err := os.CreateTemp("", fmt.Sprintf("cache-service-download-%06d-*", downloadInstruct.Offset.Part))
+		var part = 1
+		if downloadInstruct.Offset != nil {
+			part = int(downloadInstruct.Offset.Part)
+		}
+
+		f, err := os.CreateTemp("", fmt.Sprintf("cache-service-download-%06d-*", part))
 		if err != nil {
 			return download, fmt.Errorf("failed to create temp file: %w", err)
 		}
@@ -123,7 +130,7 @@ func (d *Downloader) download(ctx context.Context, downloadInstruct client.Cache
 			return download, fmt.Errorf("failed to read response body: %w", err)
 		}
 
-		download.Part = int(downloadInstruct.Offset.Part)
+		download.Part = part
 		download.URL = downloadInstruct.Url
 		download.ETag = resp.Header.Get("ETag")
 		download.Size = resp.ContentLength

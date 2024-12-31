@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
 
 	"github.com/alecthomas/kong"
+	"github.com/rs/zerolog/log"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/wolfeidau/cache-service/internal/commands"
@@ -29,7 +29,7 @@ func main() {
 
 	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/cache-service", version)
 	if err != nil {
-		log.Fatalf("failed to create trace provider: %v", err)
+		log.Fatal().Msgf("failed to create trace provider: %v", err)
 	}
 	defer func() {
 		_ = tp.Shutdown(ctx)

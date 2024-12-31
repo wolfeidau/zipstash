@@ -1,17 +1,12 @@
 package client
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestCheckPath(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	require.NoError(t, err)
-
 	tests := []struct {
 		name     string
 		path     string
@@ -26,7 +21,7 @@ func TestCheckPath(t *testing.T) {
 		},
 		{
 			name:     "multiple paths",
-			path:     "/tmp/test1 /tmp/test2 /tmp/test3",
+			path:     "/tmp/test1\n/tmp/test2\n/tmp/test3",
 			expected: []string{"/tmp/test1", "/tmp/test2", "/tmp/test3"},
 			wantErr:  false,
 		},
@@ -37,35 +32,9 @@ func TestCheckPath(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "path with tilde",
-			path:     "~/documents",
-			expected: []string{filepath.Join(homeDir, "documents")},
-			wantErr:  false,
-		},
-		{
-			name: "multiple paths with tilde",
-			path: "~/docs ~/downloads ~/desktop",
-			expected: []string{
-				filepath.Join(homeDir, "docs"),
-				filepath.Join(homeDir, "downloads"),
-				filepath.Join(homeDir, "desktop"),
-			},
-			wantErr: false,
-		},
-		{
-			name: "mixed paths with tilde",
-			path: "~/documents /tmp/test ~/downloads",
-			expected: []string{
-				filepath.Join(homeDir, "documents"),
-				"/tmp/test",
-				filepath.Join(homeDir, "downloads"),
-			},
-			wantErr: false,
-		},
-		{
-			name:     "path with spaces",
-			path:     "  /tmp/test1   /tmp/test2  ",
-			expected: []string{"/tmp/test1", "/tmp/test2"},
+			name:     "multiple paths with tilde",
+			path:     "~/documents\n~/.npm",
+			expected: []string{"~/documents", "~/.npm"},
 			wantErr:  false,
 		},
 	}

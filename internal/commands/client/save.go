@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -100,22 +98,10 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 }
 
 func checkPath(path string) ([]string, error) {
-	files := strings.Fields(path)
-	if len(files) == 0 {
+	paths := strings.Fields(path)
+	if len(paths) == 0 {
 		return nil, fmt.Errorf("no paths provided")
 	}
 
-	for i, file := range files {
-		if strings.HasPrefix(file, "~/") {
-			homedir, err := os.UserHomeDir()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get home directory: %w", err)
-			}
-
-			// update the path to be the full path
-			files[i] = filepath.Join(homedir, file[2:])
-		}
-	}
-
-	return files, nil
+	return paths, nil
 }

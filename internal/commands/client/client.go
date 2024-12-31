@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/wolfeidau/cache-service/pkg/client"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -27,4 +29,13 @@ func newClient(endpoint, token string) (*client.ClientWithResponses, error) {
 	}
 
 	return cl, nil
+}
+
+func SplitLines(s string) []string {
+	var lines []string
+	sc := bufio.NewScanner(strings.NewReader(s))
+	for sc.Scan() {
+		lines = append(lines, sc.Text())
+	}
+	return lines
 }

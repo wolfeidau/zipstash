@@ -9,12 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/klauspost/compress/zip"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
+	"github.com/wolfeidau/cache-service/internal/archive"
 	"github.com/wolfeidau/cache-service/internal/commands"
 	"github.com/wolfeidau/cache-service/internal/downloader"
 	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/quickzip"
 )
 
 type RestoreCmd struct {
@@ -25,8 +30,11 @@ type RestoreCmd struct {
 }
 
 func (c *RestoreCmd) Run(ctx context.Context, globals *commands.Globals) error {
-	_, span := trace.Start(ctx, "RestoreCmd.Run")
+	ctx, span := trace.Start(ctx, "RestoreCmd.Run")
 	defer span.End()
+
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	return c.restore(ctx, globals)
 }
 
@@ -63,42 +71,82 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		log.Info().Any("download", d).Msg("download")
 	}
 
-	zipFile, err := os.CreateTemp("", "cache-service-download-*.zip")
+	zipFile, zipFileLen, err := combineParts(ctx, downloads)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer zipFile.Close()
+
+	log.Info().Int64("zipFileLen", zipFileLen).Str("name", zipFile.Name()).Msg("zip file len")
+
+	paths, err := checkPath(c.Path)
+	if err != nil {
+		return fmt.Errorf("failed to check path: %w", err)
+	}
+
+	err = restoreFiles(ctx, zipFile, zipFileLen, paths)
+	if err != nil {
+		return fmt.Errorf("failed to restore files: %w", err)
+	}
+
+	// cleanup zip file
+	defer os.Remove(zipFile.Name())
+
+	return nil
+}
+
+func restoreFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths []string) error {
+	_, span := trace.Start(ctx, "restoreFiles")
+	defer span.End()
+	extract, err := quickzip.NewExtractorFromReader(zipFile, zipFileLen)
+	if err != nil {
+		return fmt.Errorf("failed to create extractor: %w", err)
+	}
+
+	mappings, err := archive.PathsToMappings(paths)
+	if err != nil {
+		return fmt.Errorf("failed to create mappings: %w", err)
+	}
+
+	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
+		for _, mapping := range mappings {
+			if strings.HasPrefix(file.Name, mapping.RelativePath) {
+				return filepath.Join(mapping.Chroot, file.Name), nil
+			}
+		}
+
+		return "", fmt.Errorf("failed to find path mapping for: %s", file.Name)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to extract zip file: %w", err)
+	}
+	return nil
+}
+
+// pass in a list of paths and turn them into a zip file stream to enable extraction
+func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*os.File, int64, error) {
+	_, span := trace.Start(ctx, "combineParts")
+	defer span.End()
+
+	zipFile, err := os.CreateTemp("", "cache-service-download-*.zip")
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create temp file: %w", err)
+	}
 
 	zipFileLen := int64(0)
 
 	for _, d := range downloads {
 		n, err := appendToFile(zipFile, d.FilePath)
 		if err != nil {
-			return fmt.Errorf("failed to write file: %w", err)
+			return nil, 0, fmt.Errorf("failed to write file: %w", err)
 		}
 		zipFileLen += n
 	}
 
-	log.Info().Int64("zipFileLen", zipFileLen).Str("name", zipFile.Name()).Msg("zip file len")
+	span.SetAttributes(attribute.Int64("zipFileLen", zipFileLen))
 
-	// extract, err := quickzip.NewExtractorFromReader(zipFile, zipFileLen)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create extractor: %w", err)
-	// }
-
-	// pathToMappings, err := pathToMappings(c.Path)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create path mappings: %w", err)
-	// }
-
-	// err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
-	// 	return filepath.Join()
-	// })
-
-	return nil
+	return zipFile, zipFileLen, nil
 }
-
-// pass in a list of paths and turn them into a zip file stream to enable extraction
 
 func appendToFile(f *os.File, path string) (int64, error) {
 	pf, err := os.Open(path)
@@ -115,26 +163,4 @@ func appendToFile(f *os.File, path string) (int64, error) {
 	defer os.Remove(path)
 
 	return n, nil
-}
-
-func pathToMappings(path string) (map[string]string, error) {
-	files := strings.Fields(path)
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no paths provided")
-	}
-
-	mappings := make(map[string]string)
-
-	for _, file := range files {
-		if strings.HasPrefix(file, "~/") {
-			homedir, err := os.UserHomeDir()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get home directory: %w", err)
-			}
-
-			mappings[file] = filepath.Join(homedir, file[2:])
-		}
-	}
-
-	return mappings, nil
 }

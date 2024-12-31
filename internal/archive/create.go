@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog/log"
 	"github.com/wolfeidau/quickzip"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -50,34 +51,36 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		return nil, fmt.Errorf("failed to create archiver: %w", err)
 	}
 
-	for _, path := range paths {
-		_, err := os.Stat(path)
+	mappings, err := PathsToMappings(paths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get mappings: %w", err)
+	}
+
+	for _, mapping := range mappings {
+		_, err := os.Stat(mapping.ResolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to stat file: %w", err)
 		}
 
-		_, err = isUnderHome(path)
+		_, err = isUnderHome(mapping.ResolvedPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed directory (%s) outside home directory: %w", path, err)
+			return nil, fmt.Errorf("failed directory (%s) outside home directory: %w", mapping.ResolvedPath, err)
 		}
 
 		files := make(map[string]os.FileInfo)
-		err = filepath.Walk(path, func(filename string, fi os.FileInfo, err error) error {
+		err = filepath.Walk(mapping.ResolvedPath, func(filename string, fi os.FileInfo, err error) error {
 			files[filename] = fi
 			return nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to walk path: %s with error: %w", path, err)
+			return nil, fmt.Errorf("failed to walk path: %s with error: %w", mapping.ResolvedPath, err)
 		}
 
-		chroot, err := getChrootPath(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get chroot path: %w", err)
-		}
+		log.Info().Str("chroot", mapping.Chroot).Str("path", mapping.ResolvedPath).Msg("chroot")
 
-		err = arc.Archive(context.Background(), chroot, files)
+		err = arc.Archive(context.Background(), mapping.Chroot, files)
 		if err != nil {
-			return nil, fmt.Errorf("failed to archive path: %s with error: %w", path, err)
+			return nil, fmt.Errorf("failed to archive path: %s with error: %w", mapping.ResolvedPath, err)
 		}
 	}
 
