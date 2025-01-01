@@ -9,9 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/wolfeidau/cache-service/internal/api"
 )
@@ -37,6 +37,10 @@ func NewCache(ctx context.Context, cfg Config) *Cache {
 func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 	ctx := c.Request().Context()
 
+	span := trace.SpanFromContext(ctx)
+	span.SetName("Cache.CreateCacheEntry")
+	defer span.End()
+
 	cacheEntryReq := new(api.CacheEntryCreateRequest)
 	err := c.Bind(&cacheEntryReq)
 	if err != nil {
@@ -59,8 +63,6 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 		})
 	}
 
-	log.Ctx(ctx).Info().Msg("presigned upload request")
-
 	return c.JSON(http.StatusCreated, api.CacheEntryCreateResponse{
 		Id:                 uploadInstructs.MultipartUploadId,
 		UploadInstructions: uploadInstructs.UploadInstructions,
@@ -71,6 +73,10 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 	ctx := c.Request().Context()
 
+	span := trace.SpanFromContext(ctx)
+	span.SetName("Cache.UpdateCacheEntry")
+	defer span.End()
+
 	cacheEntryReq := new(api.CacheEntryUpdateRequest)
 	err := c.Bind(&cacheEntryReq)
 	if err != nil {
@@ -79,7 +85,10 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 		})
 	}
 
-	log.Ctx(ctx).Info().Any("cacheEntryReq", cacheEntryReq).Msg("cache entry update request")
+	log.Ctx(ctx).Info().
+		Str("Id", cacheEntryReq.Id).
+		Str("Key", cacheEntryReq.Key).
+		Msg("cache entry update request")
 
 	// TODO: we need a way to record uploads which can't use multipart uploads
 	if cacheEntryReq.Id != "" {
@@ -91,14 +100,13 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 
 		parts := make([]types.CompletedPart, 0, len(cacheEntryReq.MultipartEtags))
 		for _, part := range cacheEntryReq.MultipartEtags {
-			log.Info().Int32("part", part.Part).Msg("part")
 			parts = append(parts, types.CompletedPart{
 				ETag:       aws.String(part.Etag),
 				PartNumber: aws.Int32(part.Part),
 			})
 		}
 
-		res, err := ca.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		_, err := ca.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(ca.cfg.CacheBucket),
 			Key:      aws.String(cacheEntryReq.Key),
 			UploadId: aws.String(cacheEntryReq.Id),
@@ -112,19 +120,18 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 				Message: "failed to update cache entry",
 			})
 		}
-
-		log.Ctx(ctx).Info().Any("res", res).Msg("cache entry updated")
 	}
 
-	id := uuid.New().String()
-
 	return c.JSON(http.StatusOK, api.CacheEntryUpdateResponse{
-		Id: id,
+		Id: cacheEntryReq.Id,
 	})
 }
 
 func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error {
 	ctx := c.Request().Context()
+	span := trace.SpanFromContext(ctx)
+	span.SetName("Cache.GetCacheEntryByKey")
+	defer span.End()
 
 	res, err := ca.s3client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(ca.cfg.CacheBucket),

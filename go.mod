@@ -13,7 +13,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/getkin/kin-openapi v0.128.0
-	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.11
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/oapi-codegen/echo-middleware v1.0.2
@@ -26,6 +25,7 @@ require (
 	github.com/wolfeidau/lambda-go-extras/middleware/raw v1.5.1
 	github.com/wolfeidau/lambda-go-extras/middleware/zerolog v1.5.1
 	github.com/wolfeidau/quickzip v1.0.1-0.20241228090847-e887f2252460
+	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.58.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0
@@ -62,6 +62,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect

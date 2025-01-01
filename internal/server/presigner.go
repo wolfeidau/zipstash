@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/wolfeidau/cache-service/internal/api"
+	"github.com/wolfeidau/cache-service/internal/trace"
 )
 
 const (
@@ -40,6 +41,9 @@ func NewPresigner(s3client *s3.Client, cfg Config) *Presigner {
 // If the file size is less than the minimum multipart upload part size, a single presigned PUT URL is returned.
 // Otherwise, the function calculates the necessary offsets for a multipart upload and returns the presigned URLs for each part.
 func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEntry api.CacheEntry, totalSize int64) (*UploadInstructionsResp, error) {
+	ctx, span := trace.Start(ctx, "Presigner.GenerateFileUploadInstructions")
+	defer span.End()
+
 	// minimum multipart upload part size is 5 MB
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	if totalSize < MinPartSize {
@@ -118,6 +122,9 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 // Otherwise, it generates multiple download instructions for downloading the file in parts.
 // The returned instructions include the presigned URLs and HTTP methods to use for the downloads.
 func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key string, totalSize int64) (*DownloadInstructionsResp, error) {
+	ctx, span := trace.Start(ctx, "Presigner.GenerateFileDownloadInstructions")
+	defer span.End()
+
 	// minimum multipart upload part size is 5 MB
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	if totalSize < MinPartSize {
@@ -207,8 +214,6 @@ func calculateOffsets(totalSize int64, partSize int64) []offset {
 			End:   end,
 		})
 
-		log.Info().Int32("part", i).Int64("start", start).Int64("end", end).Int64("size", end-start+1).Msg("part")
-
 		start = end + 1
 		end += partSize
 		i++
@@ -222,8 +227,6 @@ func calculateOffsets(totalSize int64, partSize int64) []offset {
 		Start: start,
 		End:   end,
 	})
-
-	log.Info().Int32("part", i).Int64("start", start).Int64("end", end).Int64("size", end-start+1).Msg("last part")
 
 	return offsets
 }

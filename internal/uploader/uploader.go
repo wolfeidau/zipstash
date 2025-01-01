@@ -32,8 +32,6 @@ type Uploader struct {
 }
 
 func NewUploader(ctx context.Context, filePath string, uploadInstructs []client.CacheUploadInstruction, limit int) *Uploader {
-	_, span := trace.Start(ctx, "NewUploader")
-	defer span.End()
 	return &Uploader{
 		filePath:        filePath,
 		uploadInstructs: uploadInstructs,

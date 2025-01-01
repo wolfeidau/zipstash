@@ -115,7 +115,7 @@ Resources:
             ApiId: !Ref HttpAPI
       ImageUri: !Ref ContainerImageUri
       ImageConfig:
-        Command: ['lambda-server']
+        Command: ['lambda']
       Environment:
         Variables:
           CACHE_BUCKET: !Ref CacheBucket

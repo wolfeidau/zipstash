@@ -8,10 +8,14 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	echo_middleware "github.com/wolfeidau/echo-middleware"
 	"github.com/wolfeidau/lambda-go-extras/lambdaextras"
 	lmw "github.com/wolfeidau/lambda-go-extras/middleware"
 	"github.com/wolfeidau/lambda-go-extras/middleware/raw"
 	zlog "github.com/wolfeidau/lambda-go-extras/middleware/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
 	"github.com/wolfeidau/cache-service/internal/server"
 	"github.com/wolfeidau/cache-service/internal/trace"
@@ -31,7 +35,22 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	e.HideBanner = true
 	e.Logger.SetOutput(io.Discard)
 
-	err := server.Setup(ctx, e, server.Config{
+	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/cache-service", globals.Version)
+	if err != nil {
+		log.Fatal().Msgf("failed to create trace provider: %v", err)
+	}
+	defer func() {
+		_ = tp.Shutdown(ctx)
+	}()
+
+	e.Use(otelecho.Middleware("listener", otelecho.WithTracerProvider(tp)))
+
+	e.Use(echo_middleware.ZeroLogWithConfig(echo_middleware.ZeroLogConfig{
+		Level:  zerolog.DebugLevel,
+		Fields: map[string]any{"version": globals.Version},
+	}))
+
+	err = server.Setup(ctx, e, server.Config{
 		JWKSURL:     s.JWKSURL,
 		CacheBucket: s.CacheBucket,
 	})

@@ -6,18 +6,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	transport "github.com/aws/smithy-go/endpoints"
-	"github.com/aws/smithy-go/logging"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	echo_middleware "github.com/wolfeidau/echo-middleware"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
 	"github.com/wolfeidau/cache-service/internal/ciauth"
 	"github.com/wolfeidau/cache-service/internal/server"
@@ -33,17 +32,24 @@ type ServerCmd struct {
 }
 
 func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
-	_, span := trace.Start(ctx, "ServerCmdRun")
-	defer span.End()
-
 	e := echo.New()
 
 	e.HideBanner = true
 	e.Logger.SetOutput(io.Discard)
 
+	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/cache-service", globals.Version)
+	if err != nil {
+		log.Fatal().Msgf("failed to create trace provider: %v", err)
+	}
+	defer func() {
+		_ = tp.Shutdown(ctx)
+	}()
+
+	e.Use(otelecho.Middleware("listener", otelecho.WithTracerProvider(tp)))
+
 	e.Use(echo_middleware.ZeroLogWithConfig(echo_middleware.ZeroLogConfig{
 		Level:  zerolog.DebugLevel,
-		Fields: map[string]interface{}{"version": "dev"},
+		Fields: map[string]any{"version": globals.Version},
 	}))
 
 	var s3ClientFunc server.S3ClientFunc
@@ -55,11 +61,8 @@ func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
 		}
 
 		s3ClientFunc = func() *s3.Client {
-
 			return s3.New(s3.Options{
-				// ClientLogMode:      aws.LogRetries | aws.LogRequest | aws.LogResponse,
 				UsePathStyle:       true,
-				Logger:             logging.NewStandardLogger(os.Stdout),
 				EndpointResolverV2: &Resolver{URL: endpointURL},
 				Credentials: aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 					return aws.Credentials{
@@ -89,7 +92,7 @@ func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
 		}
 	}
 
-	err := server.Setup(ctx, e, server.Config{
+	err = server.Setup(ctx, e, server.Config{
 		JWKSURL:     s.JWKSURL,
 		CacheBucket: s.CacheBucket,
 		GetS3Client: s3ClientFunc,

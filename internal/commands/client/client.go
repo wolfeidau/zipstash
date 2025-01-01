@@ -11,11 +11,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-type ClientCmd struct {
-	Save    SaveCmd    `cmd:"" help:"save a cache entry."`
-	Restore RestoreCmd `cmd:"" help:"restore a cache entry."`
-}
-
 func newClient(endpoint, token string) (*client.ClientWithResponses, error) {
 
 	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}

@@ -149,7 +149,7 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 }
 
 func appendToFile(f *os.File, path string) (int64, error) {
-	pf, err := os.Open(path)
+	pf, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file: %w", err)
 	}

@@ -16,11 +16,10 @@ var (
 	version = "dev"
 
 	cli struct {
-		Debug        bool `help:"Enable debug mode."`
-		Version      kong.VersionFlag
-		Server       commands.ServerCmd       `cmd:"" help:"start a server."`
-		LambdaServer commands.LambdaServerCmd `cmd:"" help:"start a server in aws lambda."`
-		Client       client.ClientCmd         `cmd:"" help:"run a client."`
+		Debug   bool `help:"Enable debug mode."`
+		Version kong.VersionFlag
+		Save    client.SaveCmd    `cmd:"" help:"save a cache entry."`
+		Restore client.RestoreCmd `cmd:"" help:"restore a cache entry."`
 	}
 )
 

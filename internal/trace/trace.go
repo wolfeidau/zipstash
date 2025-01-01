@@ -17,14 +17,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var globalProvider *Provider
+var globalProvider *sdktrace.TracerProvider
 var tracer trace.Tracer
 
-type Provider struct {
-	tp *sdktrace.TracerProvider
-}
-
-func NewProvider(ctx context.Context, name, version string) (*Provider, error) {
+func NewProvider(ctx context.Context, name, version string) (*sdktrace.TracerProvider, error) {
 	exp, err := newExporter(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create exporter: %w", err)
@@ -50,17 +46,10 @@ func NewProvider(ctx context.Context, name, version string) (*Provider, error) {
 
 	tracer = tp.Tracer(name)
 
-	globalProvider = &Provider{tp: tp}
+	// globalProvider = &Provider{tp: tp}
+	globalProvider = tp
 
 	return globalProvider, nil
-}
-
-func (p *Provider) Tracer(name string) trace.Tracer {
-	return p.tp.Tracer(name)
-}
-
-func (p *Provider) Shutdown(ctx context.Context) error {
-	return p.tp.Shutdown(ctx)
 }
 
 func Start(ctx context.Context, name string) (context.Context, trace.Span) {
