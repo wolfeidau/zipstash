@@ -8,7 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
-	"github.com/wolfeidau/cache-service/internal/api"
+	"github.com/wolfeidau/zipstash/internal/api"
 )
 
 type Config struct {

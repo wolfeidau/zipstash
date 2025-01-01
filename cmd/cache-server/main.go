@@ -5,7 +5,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/wolfeidau/cache-service/internal/commands"
+	"github.com/wolfeidau/zipstash/internal/commands"
 )
 
 var (

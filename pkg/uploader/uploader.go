@@ -12,8 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/wolfeidau/cache-service/internal/trace"
-	"github.com/wolfeidau/cache-service/pkg/client"
+	"github.com/wolfeidau/zipstash/pkg/client"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 // Uploader uses go routines to upload files in parallel with a limit of 20 concurrent uploads.

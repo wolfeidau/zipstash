@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 func TestBuildArchive(t *testing.T) {

@@ -15,11 +15,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
-	"github.com/wolfeidau/cache-service/internal/archive"
-	"github.com/wolfeidau/cache-service/internal/commands"
-	"github.com/wolfeidau/cache-service/internal/downloader"
-	"github.com/wolfeidau/cache-service/internal/trace"
 	"github.com/wolfeidau/quickzip"
+	"github.com/wolfeidau/zipstash/internal/commands"
+	"github.com/wolfeidau/zipstash/pkg/archive"
+	"github.com/wolfeidau/zipstash/pkg/downloader"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type RestoreCmd struct {

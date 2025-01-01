@@ -1,4 +1,4 @@
-module github.com/wolfeidau/cache-service
+module github.com/wolfeidau/zipstash
 
 go 1.23.4
 

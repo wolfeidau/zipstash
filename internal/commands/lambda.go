@@ -17,8 +17,8 @@ import (
 	zlog "github.com/wolfeidau/lambda-go-extras/middleware/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
-	"github.com/wolfeidau/cache-service/internal/server"
-	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/zipstash/internal/server"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type LambdaServerCmd struct {
@@ -35,7 +35,7 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	e.HideBanner = true
 	e.Logger.SetOutput(io.Discard)
 
-	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/cache-service", globals.Version)
+	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
 	if err != nil {
 		log.Fatal().Msgf("failed to create trace provider: %v", err)
 	}

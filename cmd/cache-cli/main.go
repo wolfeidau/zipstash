@@ -7,9 +7,9 @@ import (
 	"github.com/rs/zerolog/log"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
-	"github.com/wolfeidau/cache-service/internal/commands"
-	"github.com/wolfeidau/cache-service/internal/commands/client"
-	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/zipstash/internal/commands"
+	"github.com/wolfeidau/zipstash/internal/commands/client"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 func main() {
 	ctx := context.Background()
 
-	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/cache-service", version)
+	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", version)
 	if err != nil {
 		log.Fatal().Msgf("failed to create trace provider: %v", err)
 	}

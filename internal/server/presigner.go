@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog/log"
 
-	"github.com/wolfeidau/cache-service/internal/api"
-	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/zipstash/internal/api"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 const (

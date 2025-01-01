@@ -8,11 +8,11 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/wolfeidau/cache-service/internal/archive"
-	"github.com/wolfeidau/cache-service/internal/commands"
-	"github.com/wolfeidau/cache-service/internal/trace"
-	"github.com/wolfeidau/cache-service/internal/uploader"
-	"github.com/wolfeidau/cache-service/pkg/client"
+	"github.com/wolfeidau/zipstash/internal/commands"
+	"github.com/wolfeidau/zipstash/pkg/archive"
+	"github.com/wolfeidau/zipstash/pkg/client"
+	"github.com/wolfeidau/zipstash/pkg/trace"
+	"github.com/wolfeidau/zipstash/pkg/uploader"
 )
 
 type SaveCmd struct {

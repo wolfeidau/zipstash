@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/wolfeidau/cache-service/internal/api"
+	"github.com/wolfeidau/zipstash/internal/api"
 )
 
 var _ api.ServerInterface = (*Cache)(nil)
@@ -149,8 +149,6 @@ func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error 
 			Message: "failed to get cache entry",
 		})
 	}
-
-	log.Ctx(ctx).Info().Any("res", res).Msg("cache entry retrieved")
 
 	downloadInstructs, err := ca.presigner.GenerateFileDownloadInstructions(ctx, key, aws.ToInt64(res.ContentLength))
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wolfeidau/cache-service/pkg/client"
+	"github.com/wolfeidau/zipstash/pkg/client"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

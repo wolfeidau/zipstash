@@ -12,7 +12,7 @@ import (
 	"github.com/wolfeidau/quickzip"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/wolfeidau/cache-service/internal/trace"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type ArchiveInfo struct {
