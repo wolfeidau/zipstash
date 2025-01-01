@@ -59,6 +59,10 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	for _, mapping := range mappings {
 		_, err := os.Stat(mapping.ResolvedPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				log.Warn().Str("path", mapping.ResolvedPath).Msg("file does not exist")
+				continue
+			}
 			return nil, fmt.Errorf("failed to stat file: %w", err)
 		}
 

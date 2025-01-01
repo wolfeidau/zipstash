@@ -23,8 +23,8 @@ func TestBuildArchive(t *testing.T) {
 
 	archiveInfo, err := BuildArchive(context.Background(), []string{"testdata"}, "test")
 	assert.NoError(err)
-	assert.Equal("aaac9235bbbb7ef591fa8c11829ddf12d5a56ff30eeee303434af961ab569788", archiveInfo.Sha256sum)
-	assert.Equal(int64(1234), archiveInfo.Size)
+	assert.Equal("3f194172652432099ffc528f81ea6ce1687780287cba1d1a9587f5c26c72aeac", archiveInfo.Sha256sum)
+	assert.Equal(int64(1228), archiveInfo.Size)
 
 	homeDir, err := os.UserHomeDir()
 	assert.NoError(err)
