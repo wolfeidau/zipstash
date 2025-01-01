@@ -35,7 +35,7 @@ func main() {
 	}()
 
 	var span oteltrace.Span
-	ctx, span = trace.Start(ctx, "object-cache-service")
+	ctx, span = trace.Start(ctx, "zipstash")
 	defer span.End()
 
 	cmd := kong.Parse(&cli,

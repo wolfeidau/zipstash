@@ -118,7 +118,7 @@ func (d *Downloader) download(ctx context.Context, downloadInstruct client.Cache
 			part = int(downloadInstruct.Offset.Part)
 		}
 
-		f, err := os.CreateTemp("", fmt.Sprintf("cache-service-download-%06d-*", part))
+		f, err := os.CreateTemp("", fmt.Sprintf("zipstash-download-%06d-*", part))
 		if err != nil {
 			return download, fmt.Errorf("failed to create temp file: %w", err)
 		}

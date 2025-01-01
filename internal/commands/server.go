@@ -28,7 +28,7 @@ type ServerCmd struct {
 	JWKSURL     string `help:"jwks url" default:"https://token.actions.githubusercontent.com/.well-known/jwks"`
 	CacheBucket string `help:"bucket to store cache" env:"CACHE_BUCKET"`
 	Local       bool   `help:"run in local mode"`
-	Endpoint    string `help:"s3 endpoint" env:"S3_ENDPOINT" default:"http://minio.cache-service.orb.local:9000"`
+	Endpoint    string `help:"s3 endpoint" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
 }
 
 func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {

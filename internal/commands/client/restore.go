@@ -128,7 +128,7 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 	_, span := trace.Start(ctx, "combineParts")
 	defer span.End()
 
-	zipFile, err := os.CreateTemp("", "cache-service-download-*.zip")
+	zipFile, err := os.CreateTemp("", "zipstash-download-*.zip")
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create temp file: %w", err)
 	}

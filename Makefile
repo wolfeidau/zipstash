@@ -1,4 +1,4 @@
-APPNAME := object-cache-service
+APPNAME := zipstash
 STAGE ?= dev
 BRANCH ?= main
 

@@ -1,6 +1,6 @@
-# cache-service
+# zipstash
 
-This project is a object cache which is used to cache dependencies of CI projects. It provides a store API which can be used to store and retrieve objects.
+This project is a zip file cache which is used to cache compressed dependencies of CI projects. It provides a store API which can be used to store and retrieve zip files.
 
 ## Disclaimer
 

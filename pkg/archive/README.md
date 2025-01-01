@@ -1,6 +1,6 @@
 # archive
 
-This package contains the archive module which is used to create cache archives.
+This package contains the archive module which is used to create compressed archives.
 
 # inputs
 
