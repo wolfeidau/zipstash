@@ -49,6 +49,7 @@ func (s *ServerCmd) Run(ctx context.Context, globals *Globals) error {
 
 	e.Use(echo_middleware.ZeroLogWithConfig(echo_middleware.ZeroLogConfig{
 		Level:  zerolog.DebugLevel,
+		Caller: true,
 		Fields: map[string]any{"version": globals.Version},
 	}))
 

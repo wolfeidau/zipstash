@@ -138,7 +138,7 @@ func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error 
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var nsk *types.NoSuchKey
+		var nsk *types.NotFound
 		if errors.As(err, &nsk) {
 			return c.JSON(http.StatusNotFound, api.Error{
 				Message: "cache entry not found",
