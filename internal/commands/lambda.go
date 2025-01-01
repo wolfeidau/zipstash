@@ -27,9 +27,6 @@ type LambdaServerCmd struct {
 }
 
 func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
-	_, span := trace.Start(ctx, "ServerCmdRun")
-	defer span.End()
-
 	e := echo.New()
 
 	e.HideBanner = true
