@@ -100,7 +100,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 		return cachePartEtag, fmt.Errorf("failed to read chunk: %w", err)
 	}
 
-	log.Info().Str("uploading", uploadInstruct.Url).Int64("size", int64(len(chunk))).Msg("uploading")
+	log.Info().Int64("size", int64(len(chunk))).Msg("uploading")
 
 	etag, err := u.uploadChunk(ctx, uploadInstruct, chunk)
 	if err != nil {

@@ -56,7 +56,11 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		return fmt.Errorf("failed to get cache entry: %s", getEntryResp.Status())
 	}
 
-	log.Info().Any("cache entry", getEntryResp.JSON200).Msg("cache entry")
+	log.Info().
+		Str("key", getEntryResp.JSON200.CacheEntry.Key).
+		Str("compression", getEntryResp.JSON200.CacheEntry.Compression).
+		Int64("size", getEntryResp.JSON200.CacheEntry.FileSize).
+		Msg("cache entry")
 
 	downloads, err := downloader.NewDownloader(getEntryResp.JSON200.DownloadInstructions, 20).Download(ctx)
 	if err != nil {
