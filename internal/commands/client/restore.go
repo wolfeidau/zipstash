@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,12 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, "GitHubActions", c.Key)
 	if err != nil {
 		return fmt.Errorf("failed to get cache entry: %w", err)
+	}
+
+	// TODO: handle alternate restore keys
+	if getEntryResp.StatusCode() == http.StatusNotFound {
+		log.Warn().Msg("cache entry not found")
+		return nil
 	}
 
 	if getEntryResp.JSON200 == nil {
