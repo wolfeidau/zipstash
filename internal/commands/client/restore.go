@@ -20,14 +20,15 @@ import (
 	"github.com/wolfeidau/zipstash/internal/commands"
 	"github.com/wolfeidau/zipstash/pkg/archive"
 	"github.com/wolfeidau/zipstash/pkg/downloader"
+	"github.com/wolfeidau/zipstash/pkg/tokens"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type RestoreCmd struct {
-	Endpoint string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
-	Token    string `help:"token to use" required:""`
-	Key      string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
-	Path     string `help:"Path list for a cache entry." env:"INPUT_PATH"`
+	Endpoint    string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
+	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
+	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
+	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
 }
 
 func (c *RestoreCmd) Run(ctx context.Context, globals *commands.Globals) error {
@@ -43,7 +44,12 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	ctx, span := trace.Start(ctx, "RestoreCmd.restore")
 	defer span.End()
 
-	cl, err := newClient(c.Endpoint, c.Token)
+	token, err := tokens.GetToken(ctx, c.TokenSource, "", nil)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %w", err)
+	}
+
+	cl, err := newClient(c.Endpoint, token, globals.Version)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
