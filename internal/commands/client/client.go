@@ -11,12 +11,13 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-func newClient(endpoint, token string) (*client.ClientWithResponses, error) {
+func newClient(endpoint, token, version string) (*client.ClientWithResponses, error) {
 
 	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 	cl, err := client.NewClientWithResponses(endpoint, client.WithHTTPClient(httpClient), client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+		req.Header.Set("User-Agent", fmt.Sprintf("zipstash/%s", version))
 		return nil
 	}))
 	if err != nil {
