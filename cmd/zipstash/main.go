@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
@@ -24,6 +26,9 @@ var (
 )
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).
+		With().Caller().Logger()
+
 	ctx := context.Background()
 
 	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", version)
@@ -43,7 +48,16 @@ func main() {
 			"version": version,
 		},
 		kong.BindTo(ctx, (*context.Context)(nil)))
+	enableDebug(cli.Debug) // enable debug logging
 	err = cmd.Run(&commands.Globals{Debug: cli.Debug, Version: version})
 	span.RecordError(err)
 	cmd.FatalIfErrorf(err)
+}
+
+func enableDebug(debug bool) {
+	if debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 }

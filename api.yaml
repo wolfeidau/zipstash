@@ -194,6 +194,7 @@ components:
       required:
         - part
         - etag
+        - part_size
       description: Part index and ETag
       properties:
         part:
@@ -205,6 +206,9 @@ components:
           type: string
           description: ETag
           minLength: 1
+        part_size:
+          type: integer
+          format: int64
     CacheEntryUpdateRequest:
       required:
         - id

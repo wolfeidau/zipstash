@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/klauspost/compress/zip"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
@@ -34,8 +33,6 @@ type RestoreCmd struct {
 func (c *RestoreCmd) Run(ctx context.Context, globals *commands.Globals) error {
 	ctx, span := trace.Start(ctx, "RestoreCmd.Run")
 	defer span.End()
-
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	return c.restore(ctx, globals)
 }
@@ -85,7 +82,10 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	})
 
 	for _, d := range downloads {
-		log.Info().Any("download", d).Msg("download")
+		log.Debug().
+			Int("part", d.Part).
+			Str("etag", d.ETag).
+			Msg("download")
 	}
 
 	zipFile, zipFileLen, err := combineParts(ctx, downloads)
