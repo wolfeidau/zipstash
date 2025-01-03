@@ -44,7 +44,11 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to build archive: %w", err)
 	}
 
-	log.Info().Any("fileInfo", fileInfo).Msg("archive info")
+	log.Info().
+		Str("path", fileInfo.ArchivePath).
+		Int64("size", fileInfo.Size).
+		Str("sha256sum", fileInfo.Sha256sum).
+		Msg("archive built")
 
 	token, err := tokens.GetToken(ctx, c.TokenSource, "", nil)
 	if err != nil {

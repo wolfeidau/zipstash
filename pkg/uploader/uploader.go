@@ -100,8 +100,6 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 		return cachePartEtag, fmt.Errorf("failed to read chunk: %w", err)
 	}
 
-	log.Info().Int64("size", int64(len(chunk))).Msg("uploading")
-
 	etag, err := u.uploadChunk(ctx, uploadInstruct, chunk)
 	if err != nil {
 		return cachePartEtag, fmt.Errorf("failed to upload chunk: %w", err)
@@ -113,7 +111,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 		cachePartEtag.Part = uploadInstruct.Offset.Part
 	}
 
-	log.Info().Str("etag", etag).Int32("part", cachePartEtag.Part).Msg("uploaded")
+	log.Debug().Str("etag", etag).Int64("size", int64(len(chunk))).Int32("part", cachePartEtag.Part).Msg("uploaded")
 
 	return cachePartEtag, nil
 }
@@ -134,7 +132,7 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct cli
 	}
 
 	// TODO: check if offsets are valid
-	log.Info().Int32("part", uploadInstruct.Offset.Part).Int64("size", size).Int64("start", uploadInstruct.Offset.Start).Int64("end", uploadInstruct.Offset.End).Msg("reading chunk")
+	log.Debug().Int32("part", uploadInstruct.Offset.Part).Int64("size", size).Int64("start", uploadInstruct.Offset.Start).Int64("end", uploadInstruct.Offset.End).Msg("reading chunk")
 	buf := make([]byte, size)
 
 	n, err := file.ReadAt(buf, uploadInstruct.Offset.Start)
