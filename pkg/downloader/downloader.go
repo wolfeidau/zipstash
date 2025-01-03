@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog/log"
@@ -52,6 +53,7 @@ func (d *Downloader) Download(ctx context.Context) ([]DownloadedFile, error) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(d.downloadInstructs))
 	sem := make(chan struct{}, d.limit)
+	start := time.Now()
 
 	for _, downloadInstruct := range d.downloadInstructs {
 		sem <- struct{}{}
@@ -78,6 +80,7 @@ func (d *Downloader) Download(ctx context.Context) ([]DownloadedFile, error) {
 
 	select {
 	case <-d.done:
+		emitSummary(downloads, start)
 		return downloads, nil
 	case err := <-d.errors:
 		return nil, err
@@ -136,11 +139,25 @@ func (d *Downloader) download(ctx context.Context, downloadInstruct client.Cache
 		download.Size = resp.ContentLength
 		download.FilePath = f.Name()
 
-		log.Info().Int("part", download.Part).Str("path", download.FilePath).Int64("size", download.Size).Msg("downloaded file")
+		log.Debug().Int("part", download.Part).Str("path", download.FilePath).Int64("size", download.Size).Msg("downloaded file")
 
 		return download, nil
 	}
 
 	return backoff.Retry(ctx, operation,
 		backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
+}
+
+func emitSummary(downloads []DownloadedFile, start time.Time) {
+	since := time.Since(start)
+
+	var totalSize int64
+	for _, download := range downloads {
+		totalSize += download.Size
+	}
+
+	// calculate the average download speed in megabytes per second
+	averageSpeed := float64(totalSize) / since.Seconds() / 1024 / 1024
+
+	log.Info().Int64("totalSize", totalSize).Dur("duration_ms", since).Str("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)).Msg("download complete")
 }

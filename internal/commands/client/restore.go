@@ -82,7 +82,10 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	})
 
 	for _, d := range downloads {
-		log.Info().Any("download", d).Msg("download")
+		log.Debug().
+			Int("part", d.Part).
+			Str("etag", d.ETag).
+			Msg("download")
 	}
 
 	zipFile, zipFileLen, err := combineParts(ctx, downloads)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog/log"
@@ -52,6 +53,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(u.uploadInstructs))
 	sem := make(chan struct{}, u.limit)
+	start := time.Now()
 
 	for _, uploadInstruct := range u.uploadInstructs {
 		sem <- struct{}{}
@@ -79,6 +81,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 
 	select {
 	case <-u.done:
+		emitSummary(etags, start)
 		return etags, nil
 	case err := <-u.errors:
 		return nil, err
@@ -107,6 +110,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 
 	cachePartEtag.Etag = etag
 	cachePartEtag.Part = 1
+	cachePartEtag.PartSize = int64(len(chunk))
 	if uploadInstruct.Offset != nil {
 		cachePartEtag.Part = uploadInstruct.Offset.Part
 	}
@@ -179,4 +183,18 @@ func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheU
 
 	return backoff.Retry(ctx, operation,
 		backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
+}
+
+func emitSummary(etags []client.CachePartETag, start time.Time) {
+	since := time.Since(start)
+
+	var totalSize int64
+	for _, etag := range etags {
+		totalSize += etag.PartSize
+	}
+
+	// calculate the average download speed in megabytes per second
+	averageSpeed := float64(totalSize) / since.Seconds() / 1024 / 1024
+
+	log.Info().Int64("totalSize", totalSize).Dur("duration", since).Str("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)).Msg("download complete")
 }
