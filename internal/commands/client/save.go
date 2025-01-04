@@ -50,7 +50,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		Str("sha256sum", fileInfo.Sha256sum).
 		Msg("archive built")
 
-	token, err := tokens.GetToken(ctx, c.TokenSource, "", nil)
+	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get token: %w", err)
 	}
