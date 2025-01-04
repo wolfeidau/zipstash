@@ -32,6 +32,8 @@ builds:
       - v2
     ldflags:
       - -s -w -X main.build={{.Version}}
+    flags:
+      - -trimpath
   - id: server
     binary: zipstash-server
     main: ./cmd/zipstash-server/main.go
@@ -48,6 +50,8 @@ builds:
       - v2
     ldflags:
       - -s -w -X main.build={{.Version}}
+    flags:
+      - -trimpath
 
 archives:
   - format: tar.gz

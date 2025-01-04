@@ -60,7 +60,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	createResp, err := cl.CreateCacheEntryWithResponse(ctx, "GitHubActions", client.CreateCacheEntryJSONRequestBody{
+	createResp, err := cl.CreateCacheEntryWithResponse(ctx, client.GithubActions, client.CreateCacheEntryJSONRequestBody{
 		CacheEntry: client.CacheEntry{
 			Key:         c.Key,
 			Compression: "zip",
@@ -86,7 +86,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, "GitHubActions", client.CacheEntryUpdateRequest{
+	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, client.GithubActions, client.CacheEntryUpdateRequest{
 		Id:             createResp.JSON201.Id,
 		Key:            c.Key,
 		MultipartEtags: etags,
