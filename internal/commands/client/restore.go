@@ -41,7 +41,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	ctx, span := trace.Start(ctx, "RestoreCmd.restore")
 	defer span.End()
 
-	token, err := tokens.GetToken(ctx, c.TokenSource, "", nil)
+	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get token: %w", err)
 	}

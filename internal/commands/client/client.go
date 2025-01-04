@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+const audience = "zipstash.wolfe.id.au"
+
 func newClient(endpoint, token, version string) (*client.ClientWithResponses, error) {
 
 	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
