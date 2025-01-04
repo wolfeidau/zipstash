@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.71.1
 	github.com/aws/smithy-go v1.22.1
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
+	github.com/cedar-policy/cedar-go v1.1.0
 	github.com/cenkalti/backoff/v5 v5.0.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/getkin/kin-openapi v0.128.0
@@ -33,7 +34,7 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.33.0
 	go.opentelemetry.io/otel/sdk v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
-	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	golang.org/x/sync v0.10.0
 )
 
