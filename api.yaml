@@ -11,7 +11,7 @@ paths:
         - in: path
           name: provider
           schema:
-            type: string
+            $ref: '#/components/schemas/Provider'
           required: true
           description: Name of the provider.
       requestBody:
@@ -39,7 +39,7 @@ paths:
         - in: path
           name: provider
           schema:
-            type: string
+            $ref: '#/components/schemas/Provider'
           required: true
           description: Name of the provider.
       requestBody:
@@ -68,7 +68,7 @@ paths:
         - in: path
           name: provider
           schema:
-            type: string
+            $ref: '#/components/schemas/Provider'
           required: true
           description: Name of the provider.
         - name: key
@@ -91,6 +91,12 @@ paths:
                 $ref: '#/components/schemas/Error'
 components:
   schemas:
+    Provider:
+      type: string
+      enum:
+      - github_actions
+      - gitlab
+      - buildkite
     CacheEntry:
       required:
         - key

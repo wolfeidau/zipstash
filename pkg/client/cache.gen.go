@@ -20,6 +20,13 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for Provider.
+const (
+	Buildkite     Provider = "buildkite"
+	GithubActions Provider = "github_actions"
+	Gitlab        Provider = "gitlab"
+)
+
 // CacheDownloadInstruction defines model for CacheDownloadInstruction.
 type CacheDownloadInstruction struct {
 	// Method HTTP method
@@ -133,6 +140,9 @@ type Offset struct {
 	Start int64 `json:"start"`
 }
 
+// Provider defines model for Provider.
+type Provider string
+
 // CreateCacheEntryJSONRequestBody defines body for CreateCacheEntry for application/json ContentType.
 type CreateCacheEntryJSONRequestBody = CacheEntryCreateRequest
 
@@ -213,20 +223,20 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 	// CreateCacheEntryWithBody request with any body
-	CreateCacheEntryWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateCacheEntryWithBody(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateCacheEntry(ctx context.Context, provider string, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateCacheEntry(ctx context.Context, provider Provider, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateCacheEntryWithBody request with any body
-	UpdateCacheEntryWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateCacheEntryWithBody(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateCacheEntry(ctx context.Context, provider string, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateCacheEntry(ctx context.Context, provider Provider, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCacheEntryByKey request
-	GetCacheEntryByKey(ctx context.Context, provider string, key string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetCacheEntryByKey(ctx context.Context, provider Provider, key string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) CreateCacheEntryWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) CreateCacheEntryWithBody(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateCacheEntryRequestWithBody(c.Server, provider, contentType, body)
 	if err != nil {
 		return nil, err
@@ -238,7 +248,7 @@ func (c *Client) CreateCacheEntryWithBody(ctx context.Context, provider string, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateCacheEntry(ctx context.Context, provider string, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) CreateCacheEntry(ctx context.Context, provider Provider, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateCacheEntryRequest(c.Server, provider, body)
 	if err != nil {
 		return nil, err
@@ -250,7 +260,7 @@ func (c *Client) CreateCacheEntry(ctx context.Context, provider string, body Cre
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateCacheEntryWithBody(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateCacheEntryWithBody(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateCacheEntryRequestWithBody(c.Server, provider, contentType, body)
 	if err != nil {
 		return nil, err
@@ -262,7 +272,7 @@ func (c *Client) UpdateCacheEntryWithBody(ctx context.Context, provider string, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateCacheEntry(ctx context.Context, provider string, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateCacheEntry(ctx context.Context, provider Provider, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateCacheEntryRequest(c.Server, provider, body)
 	if err != nil {
 		return nil, err
@@ -274,7 +284,7 @@ func (c *Client) UpdateCacheEntry(ctx context.Context, provider string, body Upd
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetCacheEntryByKey(ctx context.Context, provider string, key string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetCacheEntryByKey(ctx context.Context, provider Provider, key string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetCacheEntryByKeyRequest(c.Server, provider, key)
 	if err != nil {
 		return nil, err
@@ -287,7 +297,7 @@ func (c *Client) GetCacheEntryByKey(ctx context.Context, provider string, key st
 }
 
 // NewCreateCacheEntryRequest calls the generic CreateCacheEntry builder with application/json body
-func NewCreateCacheEntryRequest(server string, provider string, body CreateCacheEntryJSONRequestBody) (*http.Request, error) {
+func NewCreateCacheEntryRequest(server string, provider Provider, body CreateCacheEntryJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -298,7 +308,7 @@ func NewCreateCacheEntryRequest(server string, provider string, body CreateCache
 }
 
 // NewCreateCacheEntryRequestWithBody generates requests for CreateCacheEntry with any type of body
-func NewCreateCacheEntryRequestWithBody(server string, provider string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateCacheEntryRequestWithBody(server string, provider Provider, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -334,7 +344,7 @@ func NewCreateCacheEntryRequestWithBody(server string, provider string, contentT
 }
 
 // NewUpdateCacheEntryRequest calls the generic UpdateCacheEntry builder with application/json body
-func NewUpdateCacheEntryRequest(server string, provider string, body UpdateCacheEntryJSONRequestBody) (*http.Request, error) {
+func NewUpdateCacheEntryRequest(server string, provider Provider, body UpdateCacheEntryJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -345,7 +355,7 @@ func NewUpdateCacheEntryRequest(server string, provider string, body UpdateCache
 }
 
 // NewUpdateCacheEntryRequestWithBody generates requests for UpdateCacheEntry with any type of body
-func NewUpdateCacheEntryRequestWithBody(server string, provider string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateCacheEntryRequestWithBody(server string, provider Provider, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -381,7 +391,7 @@ func NewUpdateCacheEntryRequestWithBody(server string, provider string, contentT
 }
 
 // NewGetCacheEntryByKeyRequest generates requests for GetCacheEntryByKey
-func NewGetCacheEntryByKeyRequest(server string, provider string, key string) (*http.Request, error) {
+func NewGetCacheEntryByKeyRequest(server string, provider Provider, key string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -465,17 +475,17 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 	// CreateCacheEntryWithBodyWithResponse request with any body
-	CreateCacheEntryWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error)
+	CreateCacheEntryWithBodyWithResponse(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error)
 
-	CreateCacheEntryWithResponse(ctx context.Context, provider string, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error)
+	CreateCacheEntryWithResponse(ctx context.Context, provider Provider, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error)
 
 	// UpdateCacheEntryWithBodyWithResponse request with any body
-	UpdateCacheEntryWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error)
+	UpdateCacheEntryWithBodyWithResponse(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error)
 
-	UpdateCacheEntryWithResponse(ctx context.Context, provider string, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error)
+	UpdateCacheEntryWithResponse(ctx context.Context, provider Provider, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error)
 
 	// GetCacheEntryByKeyWithResponse request
-	GetCacheEntryByKeyWithResponse(ctx context.Context, provider string, key string, reqEditors ...RequestEditorFn) (*GetCacheEntryByKeyResponse, error)
+	GetCacheEntryByKeyWithResponse(ctx context.Context, provider Provider, key string, reqEditors ...RequestEditorFn) (*GetCacheEntryByKeyResponse, error)
 }
 
 type CreateCacheEntryResponse struct {
@@ -548,7 +558,7 @@ func (r GetCacheEntryByKeyResponse) StatusCode() int {
 }
 
 // CreateCacheEntryWithBodyWithResponse request with arbitrary body returning *CreateCacheEntryResponse
-func (c *ClientWithResponses) CreateCacheEntryWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error) {
+func (c *ClientWithResponses) CreateCacheEntryWithBodyWithResponse(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error) {
 	rsp, err := c.CreateCacheEntryWithBody(ctx, provider, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -556,7 +566,7 @@ func (c *ClientWithResponses) CreateCacheEntryWithBodyWithResponse(ctx context.C
 	return ParseCreateCacheEntryResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateCacheEntryWithResponse(ctx context.Context, provider string, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error) {
+func (c *ClientWithResponses) CreateCacheEntryWithResponse(ctx context.Context, provider Provider, body CreateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCacheEntryResponse, error) {
 	rsp, err := c.CreateCacheEntry(ctx, provider, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -565,7 +575,7 @@ func (c *ClientWithResponses) CreateCacheEntryWithResponse(ctx context.Context, 
 }
 
 // UpdateCacheEntryWithBodyWithResponse request with arbitrary body returning *UpdateCacheEntryResponse
-func (c *ClientWithResponses) UpdateCacheEntryWithBodyWithResponse(ctx context.Context, provider string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error) {
+func (c *ClientWithResponses) UpdateCacheEntryWithBodyWithResponse(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error) {
 	rsp, err := c.UpdateCacheEntryWithBody(ctx, provider, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -573,7 +583,7 @@ func (c *ClientWithResponses) UpdateCacheEntryWithBodyWithResponse(ctx context.C
 	return ParseUpdateCacheEntryResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateCacheEntryWithResponse(ctx context.Context, provider string, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error) {
+func (c *ClientWithResponses) UpdateCacheEntryWithResponse(ctx context.Context, provider Provider, body UpdateCacheEntryJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCacheEntryResponse, error) {
 	rsp, err := c.UpdateCacheEntry(ctx, provider, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -582,7 +592,7 @@ func (c *ClientWithResponses) UpdateCacheEntryWithResponse(ctx context.Context, 
 }
 
 // GetCacheEntryByKeyWithResponse request returning *GetCacheEntryByKeyResponse
-func (c *ClientWithResponses) GetCacheEntryByKeyWithResponse(ctx context.Context, provider string, key string, reqEditors ...RequestEditorFn) (*GetCacheEntryByKeyResponse, error) {
+func (c *ClientWithResponses) GetCacheEntryByKeyWithResponse(ctx context.Context, provider Provider, key string, reqEditors ...RequestEditorFn) (*GetCacheEntryByKeyResponse, error) {
 	rsp, err := c.GetCacheEntryByKey(ctx, provider, key, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -692,25 +702,25 @@ func ParseGetCacheEntryByKeyResponse(rsp *http.Response) (*GetCacheEntryByKeyRes
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+RX23LbNhD9FQzaRyai5EtbvTWOx/Ek03gS+ynj8cDkSkQtAgiwdEx7+O8dACTFCyRZ",
-	"bd3rm0Qscc6ePVgsn2gicyUFCDR0/kRNkkHO3M8TlmTwVn4TK8nSc2FQFwlyKeya0lKBRg4uMgfMZGp/",
-	"pWASzZUPo+8uLy9IvRhRLBXQOTWouVjSKqJysTCA9rXvNSzonH43WZOZ1EwmH31UFdFCr8YYV58+jPeu",
-	"Iqrha8E1pHT+xb0YNSyvq8indipQl+NkLAUNxtSZ9tFO1ouErZZSc8xyGlF4YLlaWQrLR64sGBcfQCwx",
-	"o/ODQOoLvoIbwx9hDPGZPwKRC4IZkMTyJGCJEi7IbYlgumjTeBbRhdQ5QzqnXODxocfmeZHT+bRF5gJh",
-	"CdpC30E5Bn0PZQCzl1hevnJLr5qlTorTQIqKYWbGSBf2MUFJCmV9FYDkCLl7cbRlzsW5X1wDMq1ZaRdN",
-	"xmZHx8bmPZL03c+zo2OSZJDcmSLflel0dnB4dPzDjz/F7DZJYbHv/742x4cBcTZZeaswWwUfWN5WuWuz",
-	"qOfrrlpNpfrn4kQDQ/gEXwswGDgkNvAGmhO07fx2zpotYbFCrpjGG1MoJTVCoG+0QWQd1CZ8K+UKmBhl",
-	"HNo56hENZ2iUFAbGKfIAsStfmvO3oXbWEuh4tyUbUV/WG75upB6mcftODT14txFXw1MwkIRbBUK4XbJ9",
-	"Vc4AN0vyu6ue1rfIH8g+dBFV4y6wtQgDebrpbOK4WakrlW47IXvb56/qy+tzAsiWgQ59emkfR3vU5oJp",
-	"tG/t6NEhd/o+NeQUVnqfk9pEB8UeE2kB21QCF5dGwkUKD4SJlLigaMDEsg8L+pz70pt2Eyrt3/QHs503",
-	"vW+G9ZAxmhKG8QNRHJ3IZ9TdqlVq3I7+/XPhqdZSh0bCNDCouWDi1gKlGZcjB2PYcuNGzfIu0jVgE25p",
-	"f2wFG9hRBMQ/FSlR0nD7t+ktdbH3nCS3OFYU+S3ooGXZQ71lHMfxLgiDQYzP9vH+WcQ7Xe/xIqdcneB1",
-	"ZYO4WEh3pXB0XfeRK2KQmYwY0Pcu1XvQ/qOBTl/Hr2PnZAWCKU7n9MA96kzFk/vpxPXtyZPS8p6noCtX",
-	"QelvE1tHZrM7T+13hxtWOpeqI8dyQNCGzr8MBfqF5e1HRLP9a9vT7aLlQCMqWG4zaZZpVwnUBUT1x2Bg",
-	"FK+ufTAYfCPT0p8RgSAcdabUiieO/ORX4xvDeqvnTQ39+bOqfKF8T3f6zeLpC8LWV42D7Svrr+GGCvnG",
-	"MWsm9t7g4F5csGKFfxpN350CnAoBDwoShJRAHRNRU+Q5s4NabR5DWG+GsAe4CFjN37b/I6v1B7mg1eIX",
-	"hP1PWc0nNbJaFQX73eTpDkrX9ZYQcOIZ4FquN+V7+Nu9GD2FtvIz7J6OfnF/db/knmmuQXv4p5jqDLBv",
-	"KHJbEiu6Pau/BQAA///PFBDzwRQAAA==",
+	"H4sIAAAAAAAC/+xXW2/bNhj9KwS3RzaWncs2v61pkAYt1qBNnoIgoKXPFheJZEkqjRLovw8kJVkX2o63",
+	"teiGvtkixXO+w/Nd9IxjkUvBgRuN589Yxynk1P08pXEKb8QXngmaXHBtVBEbJrhdk0pIUIaB25mDSUVi",
+	"fyWgY8Wk34bfXl1donqRYFNKwHOsjWJ8hSuCxXKpwdjXflawxHP802RNZlIzmXzwuyqCC5WNMa4/vh+f",
+	"XRGs4HPBFCR4fuNeJA3L24r40M64UeU4GEtBgdZ1pH200/UiotlKKGbSHBMMjzSXmaWwemLSgjH+HvjK",
+	"pHh+GAh9yTK40+wJxhCf2BMgsUQmBRRbnggsUcQ4WpQGdBdtGs0IXgqVU4PnmHFzcuSxWV7keD5tkRk3",
+	"sAJloe+hHIO+gzKA2QssL1+5pVfNUifEaSBESU2qx0iX9jEyAhXS+ioAyQzk7sXRkTnjF35xDUiVoqVd",
+	"1CmdHZ9oG/dI0re/z45PUJxCfK+LfFek09nh0fHJL7/+FtFFnMBy3/99bU6OAuJssvJWYbYKPrC8veWu",
+	"zUjP1121mpvq58WpAmrgI3wuQJtAktiNd9Bk0Lb87eSavcIiM0xSZe50IaVQBgJ1o92E1pvagBdCZED5",
+	"KOLQyaRHNByhloJrGIfIAsSu/dVcvAmVs5ZAx7stWYL9td6xdSH1MI3bd2rowbuFuBpmwUASZhUI4XbJ",
+	"9lU5B7NZkr9960ndRf5B9KFGVI2rwNZLGMjTDWcTx81KXctkW4bsbZ9vVZfXeQKGrgIV+uzKPiZ73M0l",
+	"Vca+taNGh9zp69SQU1jpfTK12R0Ue0ykBWxDCTQuZRDjCTwiyhPkNpEBE8s+LOhL+qU37SZU3O/0h7Od",
+	"nd4Xw3rIGE0Jw/0DURwd4iPqHtUqNS5H//258EwpoUIjYRIY1Nxm5NYCVzO+jhy0pquNBzXLu0jXgM12",
+	"S/tDK9jAjjwg/hlPkBSa2b9Nbakve89JcotjeZEvQAUtSx/rI6MoinZBaBPE+GQf7x9FtNP1Ho845eoA",
+	"rcCXSjywBJQX1R51g1fMpMXijraNYsVMRheY4EXBsuSeGcC348usCGZ8KVx7YsZV8CcmkTZUp0iDenCy",
+	"PYDyHyB4ehAdRC4rJHAqGZ7jQ/eoM2FPHqYT1wMmz7JmWjk3CN+ZrCeopXmR2G8YN/h0GrQLlOZgQGk8",
+	"vxmK/QfN2w+S5vgD2x/souWACeY0t5E0y7irqlEFkPrDcldSt0JX1a0/A7R5LZLSpyE3wF1EVMqMxS6m",
+	"yZ/a156XIWwacavKe8G3DSfrLJp+Rdi6mznYvuC+0zdU0Bdm0uajoDebuBeXtMjMv0bTF8AAp4LDo4TY",
+	"QIKg3kOwLvKc2lmw9pRGtDem2BpRBBzoG/oPB/ZHyKADo68I+79yoA9q5MCKBKvj5PkeSlcjVxAw6DmY",
+	"tVyvy3fwvVqUPIcQ/FC9+fBhT7r9Jrbrflq+0HODYvK9eO0cTN9naFEiK7pN4b8CAAD//1YO9ldSFQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

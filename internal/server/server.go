@@ -34,7 +34,7 @@ func NewCache(ctx context.Context, cfg Config) *Cache {
 	}
 }
 
-func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
+func (ca *Cache) CreateCacheEntry(c echo.Context, provider api.Provider) error {
 	ctx := c.Request().Context()
 
 	span := trace.SpanFromContext(ctx)
@@ -70,7 +70,7 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider string) error {
 	})
 }
 
-func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
+func (ca *Cache) UpdateCacheEntry(c echo.Context, provider api.Provider) error {
 	ctx := c.Request().Context()
 
 	span := trace.SpanFromContext(ctx)
@@ -127,7 +127,7 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider string) error {
 	})
 }
 
-func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider, key string) error {
+func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider api.Provider, key string) error {
 	ctx := c.Request().Context()
 	span := trace.SpanFromContext(ctx)
 	span.SetName("Cache.GetCacheEntryByKey")

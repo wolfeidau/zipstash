@@ -18,6 +18,7 @@ import (
 	"github.com/wolfeidau/quickzip"
 	"github.com/wolfeidau/zipstash/internal/commands"
 	"github.com/wolfeidau/zipstash/pkg/archive"
+	"github.com/wolfeidau/zipstash/pkg/client"
 	"github.com/wolfeidau/zipstash/pkg/downloader"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
 	"github.com/wolfeidau/zipstash/pkg/trace"
@@ -51,7 +52,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, "GitHubActions", c.Key)
+	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, client.GithubActions, c.Key)
 	if err != nil {
 		return fmt.Errorf("failed to get cache entry: %w", err)
 	}

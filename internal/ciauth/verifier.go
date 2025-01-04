@@ -6,13 +6,14 @@ import (
 	"sync"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/wolfeidau/zipstash/internal/api"
 	"golang.org/x/sync/singleflight"
 )
 
 const (
-	GitHubActions = "GitHubActions"
-	GitLab        = "GitLab"
-	Buildkite     = "Buildkite"
+	GitHubActions = string(api.GithubActions)
+	GitLab        = string(api.Gitlab)
+	Buildkite     = string(api.Buildkite)
 )
 
 var (
@@ -51,7 +52,7 @@ func (o *OIDCProviders) VerifyToken(ctx context.Context, provider, token string)
 	}
 
 	// Create new provider if not in cache
-	p, err, _ := o.requestGroup.Do(provider, func() (any, error) {
+	p, err, _ := o.requestGroup.Do(string(provider), func() (any, error) {
 		prov, err := oidc.NewProvider(ctx, o.providerEndpoints[provider])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create provider: %w", err)
