@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -46,6 +47,8 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to check path: %w", err)
 	}
 
+	start := time.Now()
+
 	fileInfo, err := archive.BuildArchive(ctx, paths, c.Key)
 	if err != nil {
 		return fmt.Errorf("failed to build archive: %w", err)
@@ -55,6 +58,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		Str("path", fileInfo.ArchivePath).
 		Int64("size", fileInfo.Size).
 		Str("sha256sum", fileInfo.Sha256sum).
+		Dur("duration_ms", time.Since(start)).
 		Msg("archive built")
 
 	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)

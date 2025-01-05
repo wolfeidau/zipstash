@@ -54,6 +54,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key st
 			ContentType:    aws.String(compressionToContentType(cacheEntry.Compression)),
 			Metadata: map[string]string{
 				"zipstash-sha256": cacheEntry.Sha256sum,
+				"zipstash-name":   cacheEntry.Name,
 				"zipstash-branch": cacheEntry.Branch,
 			},
 		}, func(opts *s3.PresignOptions) {
@@ -80,6 +81,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key st
 		ContentType: aws.String(compressionToContentType(cacheEntry.Compression)),
 		Metadata: map[string]string{
 			"zipstash-sha256": cacheEntry.Sha256sum,
+			"zipstash-name":   cacheEntry.Name,
 			"zipstash-branch": cacheEntry.Branch,
 		},
 	})
