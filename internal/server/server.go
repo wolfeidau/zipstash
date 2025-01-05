@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path"
 	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,13 +50,21 @@ func (ca *Cache) CreateCacheEntry(c echo.Context, provider api.Provider) error {
 		})
 	}
 
+	prefix := path.Join(cacheEntryReq.CacheEntry.Name, cacheEntryReq.CacheEntry.Branch)
+
 	log.Ctx(ctx).Info().
 		Str("Key", cacheEntryReq.CacheEntry.Key).
+		Str("Prefix", prefix).
 		Str("Bucket", ca.cfg.CacheBucket).
 		Int64("FileSize", cacheEntryReq.CacheEntry.FileSize).
 		Msg("presign upload request")
 
-	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(ctx, cacheEntryReq.CacheEntry, cacheEntryReq.CacheEntry.FileSize)
+	uploadInstructs, err := ca.presigner.GenerateFileUploadInstructions(
+		ctx,
+		path.Join(prefix, cacheEntryReq.CacheEntry.Key),
+		cacheEntryReq.CacheEntry,
+		cacheEntryReq.CacheEntry.FileSize,
+	)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to presign upload")
 		return c.JSON(http.StatusInternalServerError, api.Error{
@@ -85,8 +94,11 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider api.Provider) error {
 		})
 	}
 
+	prefix := path.Join(cacheEntryReq.Name, cacheEntryReq.Branch)
+
 	log.Ctx(ctx).Info().
 		Str("Id", cacheEntryReq.Id).
+		Str("Prefix", prefix).
 		Str("Key", cacheEntryReq.Key).
 		Msg("cache entry update request")
 
@@ -108,7 +120,7 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider api.Provider) error {
 
 		_, err := ca.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(ca.cfg.CacheBucket),
-			Key:      aws.String(cacheEntryReq.Key),
+			Key:      aws.String(path.Join(prefix, cacheEntryReq.Key)),
 			UploadId: aws.String(cacheEntryReq.Id),
 			MultipartUpload: &types.CompletedMultipartUpload{
 				Parts: parts,
@@ -127,15 +139,22 @@ func (ca *Cache) UpdateCacheEntry(c echo.Context, provider api.Provider) error {
 	})
 }
 
-func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider api.Provider, key string) error {
+func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider api.Provider, key string, params api.GetCacheEntryByKeyParams) error {
 	ctx := c.Request().Context()
 	span := trace.SpanFromContext(ctx)
 	span.SetName("Cache.GetCacheEntryByKey")
 	defer span.End()
 
+	prefix := path.Join(params.Name, params.Branch)
+
+	log.Ctx(ctx).Info().
+		Str("Prefix", prefix).
+		Str("Key", key).
+		Msg("cache entry get request")
+
 	res, err := ca.s3client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(ca.cfg.CacheBucket),
-		Key:    aws.String(key),
+		Key:    aws.String(path.Join(prefix, key)),
 	})
 	if err != nil {
 		var nsk *types.NotFound
@@ -150,7 +169,11 @@ func (ca *Cache) GetCacheEntryByKey(c echo.Context, provider api.Provider, key s
 		})
 	}
 
-	downloadInstructs, err := ca.presigner.GenerateFileDownloadInstructions(ctx, key, aws.ToInt64(res.ContentLength))
+	downloadInstructs, err := ca.presigner.GenerateFileDownloadInstructions(
+		ctx,
+		path.Join(prefix, key),
+		aws.ToInt64(res.ContentLength),
+	)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to presign download")
 		return c.JSON(http.StatusInternalServerError, api.Error{

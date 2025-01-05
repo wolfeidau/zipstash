@@ -40,7 +40,7 @@ func NewPresigner(s3client *s3.Client, cfg Config) *Presigner {
 // GenerateFileUploadInstructions generates the necessary instructions for uploading a file to S3, including presigned URLs and multipart upload details.
 // If the file size is less than the minimum multipart upload part size, a single presigned PUT URL is returned.
 // Otherwise, the function calculates the necessary offsets for a multipart upload and returns the presigned URLs for each part.
-func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEntry api.CacheEntry, totalSize int64) (*UploadInstructionsResp, error) {
+func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key string, cacheEntry api.CacheEntry, totalSize int64) (*UploadInstructionsResp, error) {
 	ctx, span := trace.Start(ctx, "Presigner.GenerateFileUploadInstructions")
 	defer span.End()
 
@@ -49,9 +49,13 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignPutObject(ctx, &s3.PutObjectInput{
 			Bucket:         aws.String(p.cfg.CacheBucket),
-			Key:            aws.String(cacheEntry.Key),
+			Key:            aws.String(s3key),
 			ChecksumSHA256: aws.String(convertSha256ToBase64(cacheEntry.Sha256sum)),
 			ContentType:    aws.String(compressionToContentType(cacheEntry.Compression)),
+			Metadata: map[string]string{
+				"zipstash-sha256": cacheEntry.Sha256sum,
+				"zipstash-branch": cacheEntry.Branch,
+			},
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -72,8 +76,12 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 
 	createMultiResp, err := p.s3client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket:      aws.String(p.cfg.CacheBucket),
-		Key:         aws.String(cacheEntry.Key),
+		Key:         aws.String(s3key),
 		ContentType: aws.String(compressionToContentType(cacheEntry.Compression)),
+		Metadata: map[string]string{
+			"zipstash-sha256": cacheEntry.Sha256sum,
+			"zipstash-branch": cacheEntry.Branch,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart upload: %w", err)
@@ -89,7 +97,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignUploadPart(ctx, &s3.UploadPartInput{
 			Bucket:         aws.String(p.cfg.CacheBucket),
-			Key:            aws.String(cacheEntry.Key),
+			Key:            aws.String(s3key),
 			PartNumber:     aws.Int32(offset.Part),
 			UploadId:       createMultiResp.UploadId,
 			ChecksumSHA256: aws.String(convertSha256ToBase64(cacheEntry.Sha256sum)),
@@ -121,7 +129,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, cacheEnt
 // If the file size is less than the minimum multipart upload part size, it generates a single download instruction.
 // Otherwise, it generates multiple download instructions for downloading the file in parts.
 // The returned instructions include the presigned URLs and HTTP methods to use for the downloads.
-func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key string, totalSize int64) (*DownloadInstructionsResp, error) {
+func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, s3key string, totalSize int64) (*DownloadInstructionsResp, error) {
 	ctx, span := trace.Start(ctx, "Presigner.GenerateFileDownloadInstructions")
 	defer span.End()
 
@@ -130,7 +138,7 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key st
 	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(p.cfg.CacheBucket),
-			Key:    aws.String(key),
+			Key:    aws.String(s3key),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -155,7 +163,7 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, key st
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(p.cfg.CacheBucket),
-			Key:    aws.String(key),
+			Key:    aws.String(s3key),
 			Range:  aws.String(fmt.Sprintf("bytes=%d-%d", offset.Start, offset.End)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration

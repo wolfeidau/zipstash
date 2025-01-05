@@ -137,8 +137,8 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct cli
 
 	// TODO: check if offsets are valid
 	log.Debug().Int32("part", uploadInstruct.Offset.Part).Int64("size", size).Int64("start", uploadInstruct.Offset.Start).Int64("end", uploadInstruct.Offset.End).Msg("reading chunk")
-	buf := make([]byte, size)
 
+	buf := make([]byte, size)
 	n, err := file.ReadAt(buf, uploadInstruct.Offset.Start)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -196,5 +196,5 @@ func emitSummary(etags []client.CachePartETag, start time.Time) {
 	// calculate the average download speed in megabytes per second
 	averageSpeed := float64(totalSize) / since.Seconds() / 1024 / 1024
 
-	log.Info().Int64("totalSize", totalSize).Dur("duration", since).Str("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)).Msg("download complete")
+	log.Info().Int64("totalSize", totalSize).Dur("duration_ms", since).Str("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)).Msg("download complete")
 }

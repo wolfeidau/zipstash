@@ -37,3 +37,25 @@ func SplitLines(s string) []string {
 	}
 	return lines
 }
+
+type Local struct {
+	Branch     string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" and:"local"`
+	Repository string `help:"repository to use for the cache entry" env:"INPUT_REPOSITORY" and:"local"`
+}
+
+type GitHub struct {
+	Branch     string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" and:"github"`
+	Repository string `help:"repository to use for the cache entry" env:"INPUT_REPOSITORY" and:"github"`
+}
+
+func getRepoAndBranch(github GitHub, local Local) (string, string, error) {
+	if github.Repository != "" && github.Branch != "" {
+		return github.Repository, github.Branch, nil
+	}
+
+	if local.Repository != "" && local.Branch != "" {
+		return local.Repository, local.Branch, nil
+	}
+
+	return "", "", fmt.Errorf("repository and branch must be provided")
+}

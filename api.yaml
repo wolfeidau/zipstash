@@ -76,6 +76,17 @@ paths:
           required: true
           schema:
             type: string
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+        - name: branch
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: cache response with cache entry
@@ -101,6 +112,8 @@ components:
       required:
         - key
         - file_size
+        - name
+        - branch
         - compression
         - sha256sum
         - paths
@@ -116,6 +129,15 @@ components:
           description: Size of the cache entry in bytes
           example: 102
           minimum: 1
+        name:
+          type: string
+          description: GitHub repository
+          example: wolfeidau/zipstash
+          minLength: 3
+        branch:
+          type: string
+          description: Git branch
+          example: main
         compression:
           type: string
           description: Compression algorithm
@@ -218,12 +240,23 @@ components:
     CacheEntryUpdateRequest:
       required:
         - id
+        - name
+        - branch
         - key
         - multipart_etags
       properties:
         id:
           type: string
           description: Upload ID
+        name:
+          type: string
+          description: GitHub repository
+          example: wolfeidau/zipstash
+          minLength: 3
+        branch:
+          type: string
+          description: Git branch
+          example: main
         key:
           type: string
           description: Key of the cache entry
