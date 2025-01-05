@@ -29,6 +29,8 @@ type RestoreCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
+	GitHub      GitHub `embed:"" prefix:"github_"`
+	Local       Local  `embed:"" prefix:"local_"`
 }
 
 func (c *RestoreCmd) Run(ctx context.Context, globals *commands.Globals) error {
@@ -42,6 +44,11 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 	ctx, span := trace.Start(ctx, "RestoreCmd.restore")
 	defer span.End()
 
+	repo, branch, err := getRepoAndBranch(c.GitHub, c.Local)
+	if err != nil {
+		return fmt.Errorf("failed to get repo and branch: %w", err)
+	}
+
 	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get token: %w", err)
@@ -52,7 +59,10 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, client.GithubActions, c.Key)
+	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, client.GithubActions, c.Key, &client.GetCacheEntryByKeyParams{
+		Name:   repo,
+		Branch: branch,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to get cache entry: %w", err)
 	}

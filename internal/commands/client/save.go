@@ -21,6 +21,8 @@ type SaveCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
+	GitHub      GitHub `embed:"" prefix:"github_"`
+	Local       Local  `embed:"" prefix:"local_"`
 }
 
 func (c *SaveCmd) Run(ctx context.Context, globals *commands.Globals) error {
@@ -33,6 +35,11 @@ func (c *SaveCmd) Run(ctx context.Context, globals *commands.Globals) error {
 func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 	ctx, span := trace.Start(ctx, "SaveCmd.save")
 	defer span.End()
+
+	repo, branch, err := getRepoAndBranch(c.GitHub, c.Local)
+	if err != nil {
+		return fmt.Errorf("failed to get repo and branch: %w", err)
+	}
 
 	paths, err := checkPath(c.Path)
 	if err != nil {
@@ -67,6 +74,8 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 			FileSize:    fileInfo.Size,
 			Sha256sum:   fileInfo.Sha256sum,
 			Paths:       paths,
+			Name:        repo,
+			Branch:      branch,
 		},
 	})
 	if err != nil {
@@ -88,6 +97,8 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 
 	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, client.GithubActions, client.CacheEntryUpdateRequest{
 		Id:             createResp.JSON201.Id,
+		Name:           repo,
+		Branch:         branch,
 		Key:            c.Key,
 		MultipartEtags: etags,
 	})

@@ -37,6 +37,9 @@ type CacheDownloadInstruction struct {
 
 // CacheEntry defines model for CacheEntry.
 type CacheEntry struct {
+	// Branch Git branch
+	Branch string `json:"branch"`
+
 	// Compression Compression algorithm
 	Compression string `json:"compression"`
 
@@ -45,6 +48,9 @@ type CacheEntry struct {
 
 	// Key Key of the cache entry
 	Key string `json:"key"`
+
+	// Name GitHub repository
+	Name string `json:"name"`
 
 	// Paths Paths to upload the cache entry
 	Paths []string `json:"paths"`
@@ -81,6 +87,9 @@ type CacheEntryGetResponse struct {
 
 // CacheEntryUpdateRequest defines model for CacheEntryUpdateRequest.
 type CacheEntryUpdateRequest struct {
+	// Branch Git branch
+	Branch string `json:"branch"`
+
 	// Id Upload ID
 	Id string `json:"id"`
 
@@ -89,6 +98,9 @@ type CacheEntryUpdateRequest struct {
 
 	// MultipartEtags ETags
 	MultipartEtags []CachePartETag `json:"multipart_etags"`
+
+	// Name GitHub repository
+	Name string `json:"name"`
 }
 
 // CacheEntryUpdateResponse defines model for CacheEntryUpdateResponse.
@@ -141,6 +153,12 @@ type Offset struct {
 // Provider defines model for Provider.
 type Provider string
 
+// GetCacheEntryByKeyParams defines parameters for GetCacheEntryByKey.
+type GetCacheEntryByKeyParams struct {
+	Name   string `form:"name" json:"name"`
+	Branch string `form:"branch" json:"branch"`
+}
+
 // CreateCacheEntryJSONRequestBody defines body for CreateCacheEntry for application/json ContentType.
 type CreateCacheEntryJSONRequestBody = CacheEntryCreateRequest
 
@@ -157,7 +175,7 @@ type ServerInterface interface {
 	UpdateCacheEntry(ctx echo.Context, provider Provider) error
 	// Get a cache entry by key
 	// (GET /v1/cache/{provider}/{key})
-	GetCacheEntryByKey(ctx echo.Context, provider Provider, key string) error
+	GetCacheEntryByKey(ctx echo.Context, provider Provider, key string, params GetCacheEntryByKeyParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -216,8 +234,24 @@ func (w *ServerInterfaceWrapper) GetCacheEntryByKey(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter key: %s", err))
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCacheEntryByKeyParams
+	// ------------- Required query parameter "name" -------------
+
+	err = runtime.BindQueryParameter("form", true, true, "name", ctx.QueryParams(), &params.Name)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+	}
+
+	// ------------- Required query parameter "branch" -------------
+
+	err = runtime.BindQueryParameter("form", true, true, "branch", ctx.QueryParams(), &params.Branch)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter branch: %s", err))
+	}
+
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.GetCacheEntryByKey(ctx, provider, key)
+	err = w.Handler.GetCacheEntryByKey(ctx, provider, key, params)
 	return err
 }
 
@@ -258,25 +292,27 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"wG4fkPmK2KKwEvNXAAAA//8J84p4cBcAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
