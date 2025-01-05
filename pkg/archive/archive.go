@@ -13,7 +13,7 @@ import (
 
 const (
 	modifiedEpoch = "2024-01-01T00:00:00Z"
-	bufferSize    = 1024 * 1024 * 2
+	bufferSize    = 1024 * 1024 * 20
 	skipOwnership = true
 )
 
