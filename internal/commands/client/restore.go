@@ -59,7 +59,10 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, client.GithubActions, c.Key, &client.GetCacheEntryByKeyParams{
+	// convert c.TokenSource to client.Provider
+	provider := client.Provider(c.TokenSource)
+
+	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, provider, c.Key, &client.GetCacheEntryByKeyParams{
 		Name:   repo,
 		Branch: branch,
 	})
