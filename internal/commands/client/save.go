@@ -71,16 +71,21 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	createResp, err := cl.CreateCacheEntryWithResponse(ctx, client.GithubActions, client.CreateCacheEntryJSONRequestBody{
-		CacheEntry: client.CacheEntry{
-			Key:         c.Key,
-			Compression: "zip",
-			FileSize:    fileInfo.Size,
-			Sha256sum:   fileInfo.Sha256sum,
-			Paths:       paths,
-			Name:        repo,
-			Branch:      branch,
-		},
+	// convert c.TokenSource to client.Provider
+	provider := client.Provider(c.TokenSource)
+
+	cacheEntry := client.CacheEntry{
+		Key:         c.Key,
+		Compression: "zip",
+		FileSize:    fileInfo.Size,
+		Sha256sum:   fileInfo.Sha256sum,
+		Paths:       paths,
+		Name:        repo,
+		Branch:      branch,
+	}
+
+	createResp, err := cl.CreateCacheEntryWithResponse(ctx, provider, client.CreateCacheEntryJSONRequestBody{
+		CacheEntry: cacheEntry,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create cache entry: %w", err)
@@ -99,7 +104,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *commands.Globals) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, client.GithubActions, client.CacheEntryUpdateRequest{
+	updateResp, err := cl.UpdateCacheEntryWithResponse(ctx, provider, client.CacheEntryUpdateRequest{
 		Id:             createResp.JSON201.Id,
 		Name:           repo,
 		Branch:         branch,

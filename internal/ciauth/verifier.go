@@ -20,7 +20,7 @@ var (
 	DefaultProviderEndpoints = map[string]string{
 		GitHubActions: "https://token.actions.githubusercontent.com",
 		GitLab:        "https://gitlab.com",
-		Buildkite:     "https://buildkite.com",
+		Buildkite:     "https://agent.buildkite.com",
 	}
 )
 

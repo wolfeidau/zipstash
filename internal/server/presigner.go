@@ -52,11 +52,6 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key st
 			Key:            aws.String(s3key),
 			ChecksumSHA256: aws.String(convertSha256ToBase64(cacheEntry.Sha256sum)),
 			ContentType:    aws.String(compressionToContentType(cacheEntry.Compression)),
-			Metadata: map[string]string{
-				"zipstash-sha256": cacheEntry.Sha256sum,
-				"zipstash-name":   cacheEntry.Name,
-				"zipstash-branch": cacheEntry.Branch,
-			},
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -79,11 +74,6 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key st
 		Bucket:      aws.String(p.cfg.CacheBucket),
 		Key:         aws.String(s3key),
 		ContentType: aws.String(compressionToContentType(cacheEntry.Compression)),
-		Metadata: map[string]string{
-			"zipstash-sha256": cacheEntry.Sha256sum,
-			"zipstash-name":   cacheEntry.Name,
-			"zipstash-branch": cacheEntry.Branch,
-		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart upload: %w", err)

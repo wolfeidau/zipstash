@@ -23,6 +23,8 @@ func GetToken(ctx context.Context, source, audience string, httpClient *http.Cli
 	switch source {
 	case "github_actions":
 		return newGitHubActions(httpClient).getIDToken(ctx, audience)
+	case "buildkite":
+		return newBuildkite().getIDToken(ctx, audience)
 	case "local":
 		return getLocalIDToken(ctx, audience)
 	default:

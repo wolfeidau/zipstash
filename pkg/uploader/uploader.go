@@ -92,8 +92,9 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 	ctx, span := trace.Start(ctx, "Uploader.upload")
 	defer span.End()
 	size := int64(0)
+	multipart := uploadInstruct.Offset != nil
 
-	if uploadInstruct.Offset != nil {
+	if multipart {
 		size = uploadInstruct.Offset.End - uploadInstruct.Offset.Start + 1
 	}
 	var cachePartEtag client.CachePartETag
@@ -111,7 +112,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 	cachePartEtag.Etag = etag
 	cachePartEtag.Part = 1
 	cachePartEtag.PartSize = int64(len(chunk))
-	if uploadInstruct.Offset != nil {
+	if multipart {
 		cachePartEtag.Part = uploadInstruct.Offset.Part
 	}
 
@@ -166,14 +167,20 @@ func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheU
 		if err != nil {
 			return "", fmt.Errorf("failed to do upload file: %w", err)
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusBadRequest ||
 			resp.StatusCode == http.StatusForbidden ||
 			resp.StatusCode == http.StatusLengthRequired {
+
+			// // read the body and log it if there is an error
+			// if body, err := io.ReadAll(resp.Body); err == nil {
+			// 	log.Error().Str("body", string(body)).Msg("failed to upload file")
+			// }
+
 			return "", backoff.Permanent(fmt.Errorf("failed to upload file: %s", resp.Status))
 		}
 
-		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("failed to upload file: %s", resp.Status)
 		}
