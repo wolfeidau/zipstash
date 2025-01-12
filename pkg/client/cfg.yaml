@@ -1,6 +1,0 @@
-package: client
-output: cache.gen.go
-generate:
-  embedded-spec: true
-  models: true
-  client: true

@@ -13,9 +13,40 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/wolfeidau/zipstash/pkg/client"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
+
+// CachePartETag Part index and ETag
+type CachePartETag struct {
+	// Etag ETag
+	Etag string `json:"etag"`
+
+	// Part Part index
+	Part     int32 `json:"part"`
+	PartSize int64 `json:"part_size"`
+}
+
+// CacheUploadInstruction defines model for CacheUploadInstruction.
+type CacheUploadInstruction struct {
+	// Method HTTP method
+	Method string  `json:"method"`
+	Offset *Offset `json:"offset,omitempty"`
+
+	// Url URL
+	Url string `json:"url"`
+}
+
+// Offset defines model for Offset.
+type Offset struct {
+	// End End position of the part
+	End int64 `json:"end"`
+
+	// Part Part number
+	Part int32 `json:"part"`
+
+	// Start Start position of the part
+	Start int64 `json:"start"`
+}
 
 // Uploader uses go routines to upload files in parallel with a limit of 20 concurrent uploads.
 // It is provided a list of URLs to upload and a channel to receive the results.
@@ -26,13 +57,13 @@ import (
 type Uploader struct {
 	filePath        string
 	client          *http.Client
-	uploadInstructs []client.CacheUploadInstruction
+	uploadInstructs []CacheUploadInstruction
 	limit           int
 	errors          chan error
 	done            chan struct{}
 }
 
-func NewUploader(ctx context.Context, filePath string, uploadInstructs []client.CacheUploadInstruction, limit int) *Uploader {
+func NewUploader(ctx context.Context, filePath string, uploadInstructs []CacheUploadInstruction, limit int) *Uploader {
 	return &Uploader{
 		filePath:        filePath,
 		uploadInstructs: uploadInstructs,
@@ -43,12 +74,12 @@ func NewUploader(ctx context.Context, filePath string, uploadInstructs []client.
 	}
 }
 
-func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
+func (u *Uploader) Upload(ctx context.Context) ([]CachePartETag, error) {
 	ctx, span := trace.Start(ctx, "Uploader.Upload")
 	defer span.End()
 
 	var mu sync.Mutex
-	etags := make([]client.CachePartETag, 0, len(u.uploadInstructs))
+	etags := make([]CachePartETag, 0, len(u.uploadInstructs))
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(u.uploadInstructs))
@@ -57,7 +88,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 
 	for _, uploadInstruct := range u.uploadInstructs {
 		sem <- struct{}{}
-		go func(uploadInstruct client.CacheUploadInstruction) {
+		go func(uploadInstruct CacheUploadInstruction) {
 			defer func() {
 				<-sem
 				wg.Done()
@@ -88,7 +119,7 @@ func (u *Uploader) Upload(ctx context.Context) ([]client.CachePartETag, error) {
 	}
 }
 
-func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUploadInstruction) (client.CachePartETag, error) {
+func (u *Uploader) upload(ctx context.Context, uploadInstruct CacheUploadInstruction) (CachePartETag, error) {
 	ctx, span := trace.Start(ctx, "Uploader.upload")
 	defer span.End()
 	size := int64(0)
@@ -97,7 +128,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 	if multipart {
 		size = uploadInstruct.Offset.End - uploadInstruct.Offset.Start + 1
 	}
-	var cachePartEtag client.CachePartETag
+	var cachePartEtag CachePartETag
 
 	chunk, err := u.readChunk(ctx, size, uploadInstruct)
 	if err != nil {
@@ -121,7 +152,7 @@ func (u *Uploader) upload(ctx context.Context, uploadInstruct client.CacheUpload
 	return cachePartEtag, nil
 }
 
-func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct client.CacheUploadInstruction) ([]byte, error) {
+func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct CacheUploadInstruction) ([]byte, error) {
 	_, span := trace.Start(ctx, "Uploader.readChunk")
 	defer span.End()
 
@@ -153,7 +184,7 @@ func (u *Uploader) readChunk(ctx context.Context, size int64, uploadInstruct cli
 	return buf, nil
 }
 
-func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheUploadInstruction, chunk []byte) (string, error) {
+func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct CacheUploadInstruction, chunk []byte) (string, error) {
 	ctx, span := trace.Start(ctx, "Uploader.uploadChunk")
 	defer span.End()
 
@@ -192,7 +223,7 @@ func (u *Uploader) uploadChunk(ctx context.Context, uploadInstruct client.CacheU
 		backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
 }
 
-func emitSummary(etags []client.CachePartETag, start time.Time) {
+func emitSummary(etags []CachePartETag, start time.Time) {
 	since := time.Since(start)
 
 	var totalSize int64

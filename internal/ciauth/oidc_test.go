@@ -53,7 +53,7 @@ func TestExtractBearerToken(t *testing.T) {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
 
-			token, err := extractBearerToken(req)
+			token, err := extractBearerToken(req.Header)
 			if tt.expectError {
 				require.Error(t, err)
 				return

@@ -6,14 +6,13 @@ import (
 	"sync"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/wolfeidau/zipstash/internal/api"
 	"golang.org/x/sync/singleflight"
 )
 
 const (
-	GitHubActions = string(api.GithubActions)
-	GitLab        = string(api.Gitlab)
-	Buildkite     = string(api.Buildkite)
+	Buildkite     = "buildkite"
+	GitHubActions = "github_actions"
+	GitLab        = "gitlab"
 )
 
 var (

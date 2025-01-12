@@ -12,7 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/wolfeidau/zipstash/pkg/client"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
@@ -24,17 +23,38 @@ type DownloadedFile struct {
 	Size     int64
 }
 
+type CacheDownloadInstruction struct {
+	// Method HTTP method
+	Method string  `json:"method"`
+	Offset *Offset `json:"offset,omitempty"`
+
+	// Url URL
+	Url string `json:"url"`
+}
+
+// Offset defines model for Offset.
+type Offset struct {
+	// End End position of the part
+	End int64 `json:"end"`
+
+	// Part Part number
+	Part int32 `json:"part"`
+
+	// Start Start position of the part
+	Start int64 `json:"start"`
+}
+
 // Downloader uses go routines to download parts of a file in parallel with a limit of 20 concurrent uploads.
 // It is provided a list of URLs to upload and a channel to receive the results.
 type Downloader struct {
 	client            *http.Client
-	downloadInstructs []client.CacheDownloadInstruction
+	downloadInstructs []CacheDownloadInstruction
 	limit             int
 	errors            chan error
 	done              chan struct{}
 }
 
-func NewDownloader(downloadInstructs []client.CacheDownloadInstruction, limit int) *Downloader {
+func NewDownloader(downloadInstructs []CacheDownloadInstruction, limit int) *Downloader {
 	return &Downloader{
 		downloadInstructs: downloadInstructs,
 		client:            &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
@@ -57,7 +77,7 @@ func (d *Downloader) Download(ctx context.Context) ([]DownloadedFile, error) {
 
 	for _, downloadInstruct := range d.downloadInstructs {
 		sem <- struct{}{}
-		go func(downloadInstruct client.CacheDownloadInstruction) {
+		go func(downloadInstruct CacheDownloadInstruction) {
 			defer func() {
 				<-sem
 				wg.Done()
@@ -87,7 +107,7 @@ func (d *Downloader) Download(ctx context.Context) ([]DownloadedFile, error) {
 	}
 }
 
-func (d *Downloader) download(ctx context.Context, downloadInstruct client.CacheDownloadInstruction) (DownloadedFile, error) {
+func (d *Downloader) download(ctx context.Context, downloadInstruct CacheDownloadInstruction) (DownloadedFile, error) {
 	ctx, span := trace.Start(ctx, "Downloader.download")
 	defer span.End()
 
