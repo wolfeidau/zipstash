@@ -99,3 +99,16 @@ release:
     ---
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
+
+nfpms:
+  - id: client
+    builds:
+      - client
+    package_name: zipstash-client
+    vendor: Mark Wolfe
+    maintainer: Mark Wolfe <mark@wolfe.id.au>
+    formats:
+      - apk
+      - deb
+      - rpm
+    file_name_template: '{{ .PackageName }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}'
