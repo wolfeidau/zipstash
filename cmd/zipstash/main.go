@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 
+	"connectrpc.com/otelconnect"
 	"github.com/alecthomas/kong"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
-	"github.com/wolfeidau/zipstash/internal/commands"
+	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
 	"github.com/wolfeidau/zipstash/internal/commands/client"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -18,10 +20,11 @@ var (
 	version = "dev"
 
 	cli struct {
-		Debug   bool `help:"Enable debug mode."`
-		Version kong.VersionFlag
-		Save    client.SaveCmd    `cmd:"" help:"save a cache entry."`
-		Restore client.RestoreCmd `cmd:"" help:"restore a cache entry."`
+		Debug    bool `help:"Enable debug mode."`
+		Version  kong.VersionFlag
+		Endpoint string            `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
+		Save     client.SaveCmd    `cmd:"" help:"save a cache entry."`
+		Restore  client.RestoreCmd `cmd:"" help:"restore a cache entry."`
 	}
 )
 
@@ -39,6 +42,11 @@ func main() {
 		_ = tp.Shutdown(ctx)
 	}()
 
+	otelInterceptor, err := otelconnect.NewInterceptor()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create otel interceptor")
+	}
+
 	var span oteltrace.Span
 	ctx, span = trace.Start(ctx, "zipstash")
 	defer span.End()
@@ -49,7 +57,7 @@ func main() {
 		},
 		kong.BindTo(ctx, (*context.Context)(nil)))
 	enableDebug(cli.Debug) // enable debug logging
-	err = cmd.Run(&commands.Globals{Debug: cli.Debug, Version: version})
+	err = cmd.Run(&client.Globals{Debug: cli.Debug, Version: version, Client: buildClient(cli.Endpoint, otelInterceptor)})
 	span.RecordError(err)
 	cmd.FatalIfErrorf(err)
 }
@@ -60,4 +68,8 @@ func enableDebug(debug bool) {
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
+}
+
+func buildClient(endpoint string, otelInterceptor *otelconnect.Interceptor) zipstashv1connect.ZipStashServiceClient {
+	return zipstashv1connect.NewZipStashServiceClient(http.DefaultClient, endpoint)
 }

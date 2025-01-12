@@ -2,31 +2,24 @@ package client
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/wolfeidau/zipstash/pkg/client"
+	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const audience = "zipstash.wolfe.id.au"
 
-func newClient(endpoint, token, version string) (*client.ClientWithResponses, error) {
+type Globals struct {
+	Debug   bool
+	Version string
+	Client  zipstashv1connect.ZipStashServiceClient
+}
 
-	httpClient := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
-
-	cl, err := client.NewClientWithResponses(endpoint, client.WithHTTPClient(httpClient), client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		req.Header.Set("User-Agent", fmt.Sprintf("zipstash/%s", version))
-		return nil
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-
-	return cl, nil
+func newClientWithTracing() *http.Client {
+	return &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 }
 
 func SplitLines(s string) []string {

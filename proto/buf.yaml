@@ -1,0 +1,10 @@
+version: v1
+name: buf.build/wolfeidau/zipstash
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
+deps:
+  - buf.build/googleapis/googleapis

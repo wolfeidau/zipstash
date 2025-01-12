@@ -11,13 +11,13 @@ func TestOffsetsForDownload(t *testing.T) {
 		name     string
 		total    int64
 		partSize int64
-		expected []offset
+		expected []Offset
 	}{
 		{
 			name:     "10MB",
 			total:    10 * 1024 * 1024, // 10 MB
 			partSize: 5 * 1024 * 1024,  // 5 MB
-			expected: []offset{
+			expected: []Offset{
 				{
 					Part:  1,
 					Start: 0,
@@ -33,7 +33,7 @@ func TestOffsetsForDownload(t *testing.T) {
 			name:     "14MB",
 			total:    14 * 1024 * 1024, // 14 MB
 			partSize: 5 * 1024 * 1024,  // 5 MB
-			expected: []offset{
+			expected: []Offset{
 				{
 					Part:  1,
 					Start: 0,

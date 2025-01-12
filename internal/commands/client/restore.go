@@ -5,27 +5,24 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/klauspost/compress/zip"
 	"github.com/rs/zerolog/log"
+	"github.com/wolfeidau/quickzip"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
-	"github.com/wolfeidau/quickzip"
-	"github.com/wolfeidau/zipstash/internal/commands"
+	v1 "github.com/wolfeidau/zipstash/api/zipstash/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
-	"github.com/wolfeidau/zipstash/pkg/client"
 	"github.com/wolfeidau/zipstash/pkg/downloader"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type RestoreCmd struct {
-	Endpoint    string `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
@@ -33,16 +30,18 @@ type RestoreCmd struct {
 	Local       Local  `embed:"" prefix:"local_"`
 }
 
-func (c *RestoreCmd) Run(ctx context.Context, globals *commands.Globals) error {
+func (c *RestoreCmd) Run(ctx context.Context, globals *Globals) error {
 	ctx, span := trace.Start(ctx, "RestoreCmd.Run")
 	defer span.End()
 
 	return c.restore(ctx, globals)
 }
 
-func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) error {
+func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 	ctx, span := trace.Start(ctx, "RestoreCmd.restore")
 	defer span.End()
+
+	cl := globals.Client
 
 	repo, branch, err := getRepoAndBranch(c.GitHub, c.Local)
 	if err != nil {
@@ -54,39 +53,28 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *commands.Globals) err
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	cl, err := newClient(c.Endpoint, token, globals.Version)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
+	req := newAuthenticatedProviderRequest(&v1.GetCacheEntryRequest{
+		Key:      c.Key,
+		Name:     repo,
+		Branch:   branch,
+		Provider: convertProviderV1(c.TokenSource),
+	}, token, c.TokenSource, globals.Version)
 
-	// convert c.TokenSource to client.Provider
-	provider := client.Provider(c.TokenSource)
-
-	getEntryResp, err := cl.GetCacheEntryByKeyWithResponse(ctx, provider, c.Key, &client.GetCacheEntryByKeyParams{
-		Name:   repo,
-		Branch: branch,
-	})
+	getEntryResp, err := cl.GetCacheEntry(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to get cache entry: %w", err)
 	}
 
-	// TODO: handle alternate restore keys
-	if getEntryResp.StatusCode() == http.StatusNotFound {
-		log.Warn().Msg("cache entry not found")
-		return nil
-	}
-
-	if getEntryResp.JSON200 == nil {
-		return fmt.Errorf("failed to get cache entry: %s", getEntryResp.Status())
-	}
-
 	log.Info().
-		Str("key", getEntryResp.JSON200.CacheEntry.Key).
-		Str("compression", getEntryResp.JSON200.CacheEntry.Compression).
-		Int64("size", getEntryResp.JSON200.CacheEntry.FileSize).
+		Str("key", getEntryResp.Msg.CacheEntry.Key).
+		Str("compression", getEntryResp.Msg.CacheEntry.Compression).
+		Int64("size", getEntryResp.Msg.CacheEntry.FileSize).
 		Msg("cache entry")
 
-	downloads, err := downloader.NewDownloader(getEntryResp.JSON200.DownloadInstructions, 20).Download(ctx)
+	downloads, err := downloader.NewDownloader(
+		convertToDownloadInstructions(getEntryResp.Msg.DownloadInstructions),
+		20,
+	).Download(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to download cache entry: %w", err)
 	}
@@ -194,4 +182,41 @@ func appendToFile(f *os.File, path string) (int64, error) {
 	defer os.Remove(path)
 
 	return n, nil
+}
+
+func convertToDownloadInstructions(instructs []*v1.CacheDownloadInstruction) []downloader.CacheDownloadInstruction {
+	res := make([]downloader.CacheDownloadInstruction, len(instructs))
+
+	for i, downloadInstruct := range instructs {
+
+		cdi := downloader.CacheDownloadInstruction{
+			Method: downloadInstruct.Method,
+			Url:    downloadInstruct.Url,
+		}
+
+		if downloadInstruct.Offset != nil {
+			cdi.Offset = &downloader.Offset{
+				Start: downloadInstruct.Offset.Start,
+				End:   downloadInstruct.Offset.End,
+				Part:  downloadInstruct.Offset.Part,
+			}
+		}
+
+		res[i] = cdi
+	}
+
+	return res
+}
+
+func convertProviderV1(tokenSource string) v1.Provider {
+	switch tokenSource {
+	case "github_actions":
+		return v1.Provider_PROVIDER_GITHUB_ACTIONS
+	case "buildkite":
+		return v1.Provider_PROVIDER_BUILDKITE
+	case "gitlab":
+		return v1.Provider_PROVIDER_GITLAB
+	default:
+		return v1.Provider_PROVIDER_UNSPECIFIED
+	}
 }

@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package zipstash.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
+
+option go_package = "github.com/zipstash/api/v1;zipstashv1";
+
+// ZipStashService provides cache management operations
+service ZipStashService {
+  // CreateCacheEntry creates a new cache entry
+  rpc CreateCacheEntry(CreateCacheEntryRequest) returns (CreateCacheEntryResponse) {
+    option (google.api.http) = {
+      post: "/v1/cache/{provider}"
+      body: "*"
+    };
+  }
+
+  // UpdateCacheEntry updates an existing cache entry
+  rpc UpdateCacheEntry(UpdateCacheEntryRequest) returns (UpdateCacheEntryResponse) {
+    option (google.api.http) = {
+      put: "/v1/cache/{provider}"
+      body: "*"
+    };
+  }
+
+  // GetCacheEntry retrieves a cache entry by key
+  rpc GetCacheEntry(GetCacheEntryRequest) returns (GetCacheEntryResponse) {
+    option (google.api.http) = {get: "/v1/cache/{provider}/{key}"};
+  }
+}
+
+// Error represents an error response
+message Error {
+  google.rpc.Status status = 1;
+}
+
+// Provider represents supported CI/CD providers
+enum Provider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_GITHUB_ACTIONS = 1;
+  PROVIDER_GITLAB = 2;
+  PROVIDER_BUILDKITE = 3;
+}
+
+// CacheEntry represents a cache entry in the system
+message CacheEntry {
+  string key = 1;
+  int64 file_size = 2;
+  string name = 3;
+  string branch = 4;
+  string compression = 5;
+  string sha256sum = 6;
+  string url = 7;
+  repeated string paths = 8;
+  google.protobuf.Timestamp entry_created = 9;
+}
+
+// Offset represents a part of a multipart upload/download
+message Offset {
+  int32 part = 1;
+  int64 start = 2;
+  int64 end = 3;
+}
+
+// CacheUploadInstruction contains instructions for uploading cache data
+message CacheUploadInstruction {
+  string url = 1;
+  string method = 2;
+  Offset offset = 3;
+}
+
+// CacheDownloadInstruction contains instructions for downloading cache data
+message CacheDownloadInstruction {
+  string url = 1;
+  string method = 2;
+  Offset offset = 3;
+}
+
+// CachePartETag represents a part's ETag in multipart operations
+message CachePartETag {
+  int32 part = 1;
+  string etag = 2;
+  int64 part_size = 3;
+}
+
+// CreateCacheEntryRequest is the request for creating a cache entry
+message CreateCacheEntryRequest {
+  Provider provider = 1;
+  CacheEntry cache_entry = 2;
+  bool multipart_supported = 3;
+}
+
+// CreateCacheEntryResponse is the response for creating a cache entry
+message CreateCacheEntryResponse {
+  string id = 1;
+  repeated CacheUploadInstruction upload_instructions = 2;
+  bool multipart = 3;
+}
+
+// UpdateCacheEntryRequest is the request for updating a cache entry
+message UpdateCacheEntryRequest {
+  Provider provider = 1;
+  string id = 2;
+  string name = 3;
+  string branch = 4;
+  string key = 5;
+  repeated CachePartETag multipart_etags = 6;
+}
+
+// UpdateCacheEntryResponse is the response for updating a cache entry
+message UpdateCacheEntryResponse {
+  string id = 1;
+}
+
+// GetCacheEntryRequest is the request for retrieving a cache entry
+message GetCacheEntryRequest {
+  Provider provider = 1;
+  string key = 2;
+  string name = 3;
+  string branch = 4;
+}
+
+// GetCacheEntryResponse is the response for retrieving a cache entry
+message GetCacheEntryResponse {
+  CacheEntry cache_entry = 1;
+  repeated CacheDownloadInstruction download_instructions = 2;
+  bool multipart = 3;
+}
