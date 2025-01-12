@@ -121,6 +121,8 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 		if errors.As(err, &nsk) {
 			return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.GetCacheEntry not found"))
 		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get cache entry")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.GetCacheEntry internal error"))
 	}
 
 	downloadInstructs, err := zs.presigner.GenerateFileDownloadInstructions(
@@ -134,6 +136,12 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 	}
 
 	return connect.NewResponse(&v1.GetCacheEntryResponse{
+		CacheEntry: &v1.CacheEntry{
+			Key:      getReq.Msg.Key,
+			Name:     getReq.Msg.Name,
+			Branch:   getReq.Msg.Branch,
+			FileSize: aws.ToInt64(res.ContentLength),
+		},
 		Multipart:            downloadInstructs.Multipart,
 		DownloadInstructions: fromInstructToDownloadV1(downloadInstructs.DownloadInstructions),
 	}), nil

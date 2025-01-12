@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"connectrpc.com/connect"
 	"github.com/klauspost/compress/zip"
 	"github.com/rs/zerolog/log"
 	"github.com/wolfeidau/quickzip"
@@ -62,6 +63,10 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	getEntryResp, err := cl.GetCacheEntry(ctx, req)
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodeNotFound {
+			log.Info().Msg("cache entry not found")
+			return nil
+		}
 		return fmt.Errorf("failed to get cache entry: %w", err)
 	}
 
