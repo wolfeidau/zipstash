@@ -5,14 +5,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"connectrpc.com/connect"
-	"github.com/klauspost/compress/zip"
 	"github.com/rs/zerolog/log"
-	"github.com/wolfeidau/quickzip"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
@@ -27,6 +25,7 @@ type RestoreCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
+	Clean       bool   `help:"clean the path before restore" env:"INPUT_CLEAN"`
 	GitHub      GitHub `embed:"" prefix:"github_"`
 	Local       Local  `embed:"" prefix:"local_"`
 }
@@ -108,7 +107,24 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to check path: %w", err)
 	}
 
-	err = restoreFiles(ctx, zipFile, zipFileLen, paths)
+	if c.Clean {
+		for _, path := range paths {
+			path, err := archive.ResolveHomeDir(path)
+			if err != nil {
+				return fmt.Errorf("failed to resolve home dir: %w", err)
+			}
+
+			log.Info().Str("path", path).Msg("cleaning path")
+			err = removeAll(path)
+			if err != nil {
+				return fmt.Errorf("failed to clean path: %w", err)
+			}
+		}
+	}
+
+	log.Info().Strs("paths", paths).Msg("extracting files")
+
+	err = archive.ExtractFiles(ctx, zipFile, zipFileLen, paths)
 	if err != nil {
 		return fmt.Errorf("failed to restore files: %w", err)
 	}
@@ -116,34 +132,6 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 	// cleanup zip file
 	defer os.Remove(zipFile.Name())
 
-	return nil
-}
-
-func restoreFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths []string) error {
-	_, span := trace.Start(ctx, "restoreFiles")
-	defer span.End()
-	extract, err := quickzip.NewExtractorFromReader(zipFile, zipFileLen)
-	if err != nil {
-		return fmt.Errorf("failed to create extractor: %w", err)
-	}
-
-	mappings, err := archive.PathsToMappings(paths)
-	if err != nil {
-		return fmt.Errorf("failed to create mappings: %w", err)
-	}
-
-	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
-		for _, mapping := range mappings {
-			if strings.HasPrefix(file.Name, mapping.RelativePath) {
-				return filepath.Join(mapping.Chroot, file.Name), nil
-			}
-		}
-
-		return "", fmt.Errorf("failed to find path mapping for: %s", file.Name)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to extract zip file: %w", err)
-	}
 	return nil
 }
 
@@ -160,7 +148,7 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 	zipFileLen := int64(0)
 
 	for _, d := range downloads {
-		n, err := appendToFile(zipFile, d.FilePath)
+		n, err := appendToFileAndRemove(zipFile, d.FilePath)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to write file: %w", err)
 		}
@@ -172,7 +160,7 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 	return zipFile, zipFileLen, nil
 }
 
-func appendToFile(f *os.File, path string) (int64, error) {
+func appendToFileAndRemove(f *os.File, path string) (int64, error) {
 	pf, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file: %w", err)
@@ -224,4 +212,25 @@ func convertProviderV1(tokenSource string) v1.Provider {
 	default:
 		return v1.Provider_PROVIDER_UNSPECIFIED
 	}
+}
+
+// RemoveAll removes a directory written by Download or Unzip, first applying
+// any permission changes needed to do so.
+func removeAll(dir string) error {
+	log.Info().Str("path", dir).Msg("changing permissions")
+
+	// Module cache has 0555 directories; make them writable in order to remove content.
+	err := filepath.WalkDir(dir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // ignore errors walking in file system
+		}
+		if info.IsDir() {
+			return os.Chmod(path, 0777)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }

@@ -42,6 +42,7 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 		Str("Key", createReq.Msg.CacheEntry.Key).
 		Str("Prefix", prefix).
 		Str("Bucket", zs.cfg.CacheBucket).
+		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
 		Int64("FileSize", createReq.Msg.CacheEntry.FileSize).
 		Msg("presign upload request")
 
@@ -107,23 +108,25 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 	prefix := path.Join(getReq.Msg.Name, getReq.Msg.Branch)
 	s3key := path.Join(prefix, getReq.Msg.Key)
 
-	log.Ctx(ctx).Info().
+	log.Info().
 		Str("Prefix", prefix).
 		Str("Key", getReq.Msg.Key).
 		Msg("cache entry get request")
 
-	res, err := zs.s3client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(zs.cfg.CacheBucket),
-		Key:    aws.String(s3key),
-	})
+	exists, res, err := zs.exists(ctx, getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
 	if err != nil {
-		var nsk *types.NotFound
-		if errors.As(err, &nsk) {
-			return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.GetCacheEntry not found"))
-		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to get cache entry")
+		log.Error().Err(err).Msg("failed to get cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.GetCacheEntry internal error"))
 	}
+
+	if !exists {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.GetCacheEntry not found"))
+	}
+
+	log.Info().
+		Str("Prefix", prefix).
+		Str("Key", getReq.Msg.Key).
+		Str("sha256sum", aws.ToString(res.ChecksumSHA256)).Msg("cache entry found")
 
 	downloadInstructs, err := zs.presigner.GenerateFileDownloadInstructions(
 		ctx,
@@ -131,7 +134,7 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 		aws.ToInt64(res.ContentLength),
 	)
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to presign download")
+		log.Error().Err(err).Msg("failed to presign download")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.GetCacheEntry internal error"))
 	}
 
@@ -145,6 +148,29 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 		Multipart:            downloadInstructs.Multipart,
 		DownloadInstructions: fromInstructToDownloadV1(downloadInstructs.DownloadInstructions),
 	}), nil
+}
+
+func (zs *ZipStashServiceHandler) exists(ctx context.Context, name, branch, key string) (bool, *s3.HeadObjectOutput, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetName("ZipStash.exists")
+	defer span.End()
+
+	prefix := path.Join(name, branch)
+	s3key := path.Join(prefix, key)
+	res, err := zs.s3client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(zs.cfg.CacheBucket),
+		Key:    aws.String(s3key),
+	})
+	if err != nil {
+		var nsk *types.NotFound
+		if errors.As(err, &nsk) {
+			return false, nil, nil
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get cache entry")
+		return false, nil, err
+	}
+
+	return true, res, nil
 }
 
 func fromUploadInstructions(uploadInstructs []CacheURLInstruction) []*v1.CacheUploadInstruction {
