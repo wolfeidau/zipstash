@@ -42,6 +42,7 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 		Str("Key", createReq.Msg.CacheEntry.Key).
 		Str("Prefix", prefix).
 		Str("Bucket", zs.cfg.CacheBucket).
+		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
 		Int64("FileSize", createReq.Msg.CacheEntry.FileSize).
 		Msg("presign upload request")
 

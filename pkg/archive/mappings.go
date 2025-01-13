@@ -61,6 +61,17 @@ func PathsToMappings(paths []string) ([]Mapping, error) {
 	return pathMappings, nil
 }
 
+func ResolveHomeDir(path string) (string, error) {
+	if strings.HasPrefix(path, "~/") {
+		homedir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		return filepath.Join(homedir, path[2:]), nil
+	}
+	return path, nil
+}
+
 func chrootPath(path string) (string, error) {
 	if filepath.IsAbs(path) {
 		return os.UserHomeDir()
