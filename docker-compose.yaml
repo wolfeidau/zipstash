@@ -18,5 +18,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  dynamodb-local:
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    image: "amazon/dynamodb-local:latest"
+    user: 0:0
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    volumes:
+      - dynamodblocal:/home/dynamodblocal/data
+    working_dir: /home/dynamodblocal
 volumes:
   data:
+  dynamodblocal:

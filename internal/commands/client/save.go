@@ -80,6 +80,10 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 
 	createResp, err := cl.CreateCacheEntry(ctx, req)
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodeAlreadyExists {
+			log.Info().Msg("cache entry found with matching sha256sum")
+			return nil
+		}
 		return fmt.Errorf("failed to create cache entry: %w", err)
 	}
 

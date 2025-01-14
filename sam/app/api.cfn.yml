@@ -41,6 +41,55 @@ Globals:
         BRANCH: !Ref Branch
 
 Resources:
+  CacheIndexTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: name
+          AttributeType: S
+        - AttributeName: created
+          AttributeType: S
+        - AttributeName: pk1
+          AttributeType: S
+        - AttributeName: sk1
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: name
+          KeyType: RANGE
+      LocalSecondaryIndexes:
+        - IndexName: idx_created
+          KeySchema:
+            - AttributeName: id
+              KeyType: HASH
+            - AttributeName: created
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      GlobalSecondaryIndexes:
+        - IndexName: idx_global_1
+          KeySchema:
+            - AttributeName: pk1
+              KeyType: HASH
+            - AttributeName: sk1
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+      TimeToLiveSpecification:
+        AttributeName: expires
+        Enabled: true
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
   CacheBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -119,10 +168,13 @@ Resources:
       Environment:
         Variables:
           CACHE_BUCKET: !Ref CacheBucket
+          CACHE_INDEX_TABLE: !Ref CacheIndexTable
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref CacheBucket
         - S3WritePolicy:
             BucketName: !Ref CacheBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheIndexTable
       Architectures:
         - arm64

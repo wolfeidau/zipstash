@@ -5,29 +5,41 @@ import (
 	"errors"
 	"path"
 	"sort"
+	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/wolfeidau/zipstash/api/zipstash/v1"
+	"github.com/wolfeidau/zipstash/internal/index"
 )
 
 type ZipStashServiceHandler struct {
-	s3client  *s3.Client
+	s3Client  *s3.Client
+	ddbClient *dynamodb.Client
 	presigner *Presigner
+	store     *index.Store
 	cfg       Config
 }
 
 func NewZipStashServiceHandler(ctx context.Context, cfg Config) *ZipStashServiceHandler {
-	s3client := cfg.GetS3Client()
+	s3Client := cfg.GetS3Client()
+	ddbClient := cfg.GetDynamoDBClient()
 	return &ZipStashServiceHandler{
-		s3client:  s3client,
-		presigner: NewPresigner(s3client, cfg),
-		cfg:       cfg,
+		s3Client:  s3Client,
+		ddbClient: ddbClient,
+		presigner: NewPresigner(s3Client, cfg),
+		store: index.MustNewStore(ctx, ddbClient, index.StoreConfig{
+			TableName: cfg.CacheIndexTable,
+			Create:    cfg.CreateCacheIndexTable,
+		}),
+		cfg: cfg,
 	}
 }
 
@@ -37,6 +49,7 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 	defer span.End()
 
 	prefix := path.Join(createReq.Msg.CacheEntry.Name, createReq.Msg.CacheEntry.Branch)
+	s3key := path.Join(prefix, createReq.Msg.CacheEntry.Key)
 
 	log.Info().
 		Str("Key", createReq.Msg.CacheEntry.Key).
@@ -46,9 +59,41 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 		Int64("FileSize", createReq.Msg.CacheEntry.FileSize).
 		Msg("presign upload request")
 
+	// does the cache entry already exist?
+	exists, cacheRec, err := zs.store.Exists(ctx, s3key)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if cache entry exists")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+	}
+
+	if exists {
+		log.Info().Msg("cache entry already exists")
+		if cacheRec.Sha256 == createReq.Msg.CacheEntry.Sha256Sum {
+			log.Info().Msg("cache entry already exists with matching sha256sum")
+			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry cache entry already exists"))
+		}
+	}
+
+	// create/update the cache entry in the cache index
+	// TODO: should we store this record after generating the upload instructions? So we can put the upload ID in the record and validate the upload ID when the upload is complete?
+	err = zs.store.Put(ctx, s3key, index.CacheRecord{
+		ID:     createReq.Msg.CacheEntry.Key,
+		Paths:  strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
+		Name:   createReq.Msg.CacheEntry.Name,
+		Branch: createReq.Msg.CacheEntry.Branch,
+		// TokenSource: createReq.Msg.CacheEntry.TokenSource,
+		Sha256:    createReq.Msg.CacheEntry.Sha256Sum,
+		FileSize:  createReq.Msg.CacheEntry.FileSize,
+		UpdatedAt: time.Now(),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create cache entry")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+	}
+
 	uploadInstructs, err := zs.presigner.GenerateFileUploadInstructions(
 		ctx,
-		path.Join(prefix, createReq.Msg.CacheEntry.Key),
+		s3key,
 		createReq.Msg.CacheEntry.Sha256Sum,
 		createReq.Msg.CacheEntry.Compression,
 		createReq.Msg.CacheEntry.FileSize,
@@ -73,6 +118,18 @@ func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateRe
 	prefix := path.Join(updateReq.Msg.Name, updateReq.Msg.Branch)
 	s3key := path.Join(prefix, updateReq.Msg.Key)
 
+	// does the cache entry exist?
+	exists, _, err := zs.store.Exists(ctx, s3key)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if cache entry exists")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+	}
+
+	if !exists {
+		log.Info().Msg("cache entry does not exist")
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.UpdateCacheEntry cache entry does not exist"))
+	}
+
 	log.Info().
 		Str("Id", updateReq.Msg.Id).
 		Str("Prefix", prefix).
@@ -81,7 +138,7 @@ func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateRe
 		Msg("cache entry update request")
 
 	if updateReq.Msg.Id != "" {
-		_, err := zs.s3client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		_, err := zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(zs.cfg.CacheBucket),
 			Key:      aws.String(s3key),
 			UploadId: aws.String(updateReq.Msg.Id),
@@ -112,6 +169,18 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 		Str("Prefix", prefix).
 		Str("Key", getReq.Msg.Key).
 		Msg("cache entry get request")
+
+	// does the cache entry exist?
+	exists, _, err := zs.store.Exists(ctx, s3key)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if cache entry exists")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+	}
+
+	if !exists {
+		log.Info().Msg("cache entry does not exist")
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.UpdateCacheEntry cache entry does not exist"))
+	}
 
 	exists, res, err := zs.exists(ctx, getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
 	if err != nil {
@@ -157,7 +226,7 @@ func (zs *ZipStashServiceHandler) exists(ctx context.Context, name, branch, key 
 
 	prefix := path.Join(name, branch)
 	s3key := path.Join(prefix, key)
-	res, err := zs.s3client.HeadObject(ctx, &s3.HeadObjectInput{
+	res, err := zs.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(zs.cfg.CacheBucket),
 		Key:    aws.String(s3key),
 	})
