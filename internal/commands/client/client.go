@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 )
 
 const audience = "zipstash.wolfe.id.au"
@@ -13,7 +13,7 @@ const audience = "zipstash.wolfe.id.au"
 type Globals struct {
 	Debug   bool
 	Version string
-	Client  zipstashv1connect.ZipStashServiceClient
+	Client  cachev1connect.CacheServiceClient
 }
 
 func SplitLines(s string) []string {

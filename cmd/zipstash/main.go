@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
-	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/commands/client"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -70,6 +70,6 @@ func enableDebug(debug bool) {
 	}
 }
 
-func buildClient(endpoint string, otelInterceptor *otelconnect.Interceptor) zipstashv1connect.ZipStashServiceClient {
-	return zipstashv1connect.NewZipStashServiceClient(http.DefaultClient, endpoint)
+func buildClient(endpoint string, otelInterceptor *otelconnect.Interceptor) cachev1connect.CacheServiceClient {
+	return cachev1connect.NewCacheServiceClient(http.DefaultClient, endpoint)
 }

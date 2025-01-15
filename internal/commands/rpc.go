@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
@@ -70,7 +70,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}
 	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
-	zs := server.NewZipStashServiceHandler(ctx, server.Config{
+	csh := server.NewCacheServiceHandler(ctx, server.Config{
 		CacheBucket:           s.CacheBucket,
 		CacheIndexTable:       s.CacheIndexTable,
 		CreateCacheIndexTable: s.CreateCacheIndexTable,
@@ -78,7 +78,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		GetDynamoDBClient:     ddbClientFunc,
 	})
 	mux := http.NewServeMux()
-	path, handler := zipstashv1connect.NewZipStashServiceHandler(zs, opts...)
+	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
 	mux.Handle(path, handler)
 
 	return http.ListenAndServe(
