@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/http2"
@@ -20,10 +21,13 @@ import (
 )
 
 type RPCServerCmd struct {
-	Listen      string `help:"listen address" default:"localhost:8080"`
-	CacheBucket string `help:"bucket to store cache" env:"CACHE_BUCKET"`
-	Local       bool   `help:"run in local mode"`
-	Endpoint    string `help:"s3 endpoint" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
+	Listen                string `help:"listen address" default:"localhost:8080"`
+	CacheBucket           string `help:"bucket to store cache" env:"CACHE_BUCKET"`
+	CacheIndexTable       string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
+	CreateCacheIndexTable bool   `help:"create cache index table if it does not exist" env:"CREATE_CACHE_INDEX_TABLE" default:"false"`
+	Local                 bool   `help:"run in local mode"`
+	S3Endpoint            string `help:"s3 endpoint, used in local mode" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
+	DynamoEndpoint        string `help:"s3 endpoint, used in local mode" env:"DYNAMO_ENDPOINT" default:"http://dynamodb-local.zipstash.orb.local:8000"`
 }
 
 func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
@@ -36,13 +40,11 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}()
 
 	var s3ClientFunc server.S3ClientFunc
+	var ddbClientFunc server.DynamoDBClientFunc
 	opts := []connect.HandlerOption{}
 	if s.Local {
-		s3ClientFunc, err = newLocalS3Client(s.Endpoint)
-		if err != nil {
-			return fmt.Errorf("failed to create local s3 client: %w", err)
-		}
-
+		s3ClientFunc = newLocalS3Client(s.S3Endpoint)
+		ddbClientFunc = newLocalDDBClient(s.DynamoEndpoint)
 	} else {
 		awscfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {
@@ -50,6 +52,9 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		}
 		s3ClientFunc = func() *s3.Client {
 			return s3.NewFromConfig(awscfg)
+		}
+		ddbClientFunc = func() *dynamodb.Client {
+			return dynamodb.NewFromConfig(awscfg)
 		}
 
 		opts = append(opts, connect.WithInterceptors(
@@ -66,8 +71,11 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
 	zs := server.NewZipStashServiceHandler(ctx, server.Config{
-		CacheBucket: s.CacheBucket,
-		GetS3Client: s3ClientFunc,
+		CacheBucket:           s.CacheBucket,
+		CacheIndexTable:       s.CacheIndexTable,
+		CreateCacheIndexTable: s.CreateCacheIndexTable,
+		GetS3Client:           s3ClientFunc,
+		GetDynamoDBClient:     ddbClientFunc,
 	})
 	mux := http.NewServeMux()
 	path, handler := zipstashv1connect.NewZipStashServiceHandler(zs, opts...)

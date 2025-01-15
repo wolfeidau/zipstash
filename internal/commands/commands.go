@@ -2,10 +2,10 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	transport "github.com/aws/smithy-go/endpoints"
 	"github.com/wolfeidau/zipstash/internal/server"
@@ -28,16 +28,11 @@ func (r *Resolver) ResolveEndpoint(_ context.Context, params s3.EndpointParamete
 	return transport.Endpoint{URI: u}, nil
 }
 
-func newLocalS3Client(endpoint string) (server.S3ClientFunc, error) {
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse endpoint: %w", err)
-	}
-
+func newLocalS3Client(endpoint string) server.S3ClientFunc {
 	return func() *s3.Client {
 		return s3.New(s3.Options{
-			UsePathStyle:       true,
-			EndpointResolverV2: &Resolver{URL: endpointURL},
+			UsePathStyle:     true,
+			EndpointResolver: s3.EndpointResolverFromURL(endpoint),
 			Credentials: aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 				return aws.Credentials{
 					AccessKeyID:     "minioadmin",
@@ -45,5 +40,19 @@ func newLocalS3Client(endpoint string) (server.S3ClientFunc, error) {
 				}, nil
 			}),
 		})
-	}, nil
+	}
+}
+
+func newLocalDDBClient(endpoint string) server.DynamoDBClientFunc {
+	return func() *dynamodb.Client {
+		return dynamodb.New(dynamodb.Options{
+			EndpointResolver: dynamodb.EndpointResolverFromURL(endpoint),
+			Credentials: aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+				return aws.Credentials{
+					AccessKeyID:     "minioadmin",
+					SecretAccessKey: "minioadmin",
+				}, nil
+			}),
+		})
+	}
 }

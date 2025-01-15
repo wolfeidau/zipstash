@@ -3,11 +3,9 @@ package client
 import (
 	"bufio"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const audience = "zipstash.wolfe.id.au"
@@ -16,10 +14,6 @@ type Globals struct {
 	Debug   bool
 	Version string
 	Client  zipstashv1connect.ZipStashServiceClient
-}
-
-func newClientWithTracing() *http.Client {
-	return &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 }
 
 func SplitLines(s string) []string {
