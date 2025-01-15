@@ -9,7 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog/log"
 
-	v1 "github.com/wolfeidau/zipstash/api/zipstash/v1"
+	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
 	"github.com/wolfeidau/zipstash/pkg/trace"
@@ -66,7 +66,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	req := newAuthenticatedProviderRequest(&v1.CreateCacheEntryRequest{
+	req := newAuthenticatedProviderRequest(&v1.CreateEntryRequest{
 		CacheEntry: &v1.CacheEntry{
 			Key:         c.Key,
 			Compression: "zip",
@@ -78,7 +78,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		},
 	}, token, c.TokenSource, globals.Version)
 
-	createResp, err := cl.CreateCacheEntry(ctx, req)
+	createResp, err := cl.CreateEntry(ctx, req)
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeAlreadyExists {
 			log.Info().Msg("cache entry found with matching sha256sum")
@@ -96,7 +96,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	updateReq := newAuthenticatedProviderRequest(&v1.UpdateCacheEntryRequest{
+	updateReq := newAuthenticatedProviderRequest(&v1.UpdateEntryRequest{
 		Id:             createResp.Msg.Id,
 		Name:           repo,
 		Branch:         branch,
@@ -104,7 +104,7 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		MultipartEtags: toEtagsV1(etags),
 	}, token, c.TokenSource, globals.Version)
 
-	updateResp, err := cl.UpdateCacheEntry(ctx, updateReq)
+	updateResp, err := cl.UpdateEntry(ctx, updateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update cache entry: %w", err)
 	}

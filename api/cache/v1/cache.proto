@@ -1,23 +1,21 @@
 syntax = "proto3";
 
-package zipstash.v1;
+package cache.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
 
-option go_package = "github.com/zipstash/api/v1;zipstashv1";
+// CacheService provides cache management operations
+service CacheService {
+  // CreateEntry creates a new cache entry
+  rpc CreateEntry(CreateEntryRequest) returns (CreateEntryResponse) {}
 
-// ZipStashService provides cache management operations
-service ZipStashService {
-  // CreateCacheEntry creates a new cache entry
-  rpc CreateCacheEntry(CreateCacheEntryRequest) returns (CreateCacheEntryResponse) {}
+  // UpdateEntry updates an existing cache entry
+  rpc UpdateEntry(UpdateEntryRequest) returns (UpdateEntryResponse) {}
 
-  // UpdateCacheEntry updates an existing cache entry
-  rpc UpdateCacheEntry(UpdateCacheEntryRequest) returns (UpdateCacheEntryResponse) {}
-
-  // GetCacheEntry retrieves a cache entry by key
-  rpc GetCacheEntry(GetCacheEntryRequest) returns (GetCacheEntryResponse) {}
+  // GetEntry retrieves a cache entry by key
+  rpc GetEntry(GetEntryRequest) returns (GetEntryResponse) {}
 }
 
 // Error represents an error response
@@ -33,7 +31,7 @@ enum Provider {
   PROVIDER_BUILDKITE = 3;
 }
 
-// CacheEntry represents a cache entry in the system
+// Entry represents a cache entry in the system
 message CacheEntry {
   string key = 1;
   int64 file_size = 2;
@@ -74,22 +72,22 @@ message CachePartETag {
   int64 part_size = 3;
 }
 
-// CreateCacheEntryRequest is the request for creating a cache entry
-message CreateCacheEntryRequest {
+// CreateEntryRequest is the request for creating a cache entry
+message CreateEntryRequest {
   Provider provider = 1;
   CacheEntry cache_entry = 2;
   bool multipart_supported = 3;
 }
 
-// CreateCacheEntryResponse is the response for creating a cache entry
-message CreateCacheEntryResponse {
+// CreateEntryResponse is the response for creating a cache entry
+message CreateEntryResponse {
   string id = 1;
   repeated CacheUploadInstruction upload_instructions = 2;
   bool multipart = 3;
 }
 
-// UpdateCacheEntryRequest is the request for updating a cache entry
-message UpdateCacheEntryRequest {
+// UpdateEntryRequest is the request for updating a cache entry
+message UpdateEntryRequest {
   Provider provider = 1;
   string id = 2;
   string name = 3;
@@ -98,21 +96,21 @@ message UpdateCacheEntryRequest {
   repeated CachePartETag multipart_etags = 6;
 }
 
-// UpdateCacheEntryResponse is the response for updating a cache entry
-message UpdateCacheEntryResponse {
+// UpdateEntryResponse is the response for updating a cache entry
+message UpdateEntryResponse {
   string id = 1;
 }
 
-// GetCacheEntryRequest is the request for retrieving a cache entry
-message GetCacheEntryRequest {
+// GetEntryRequest is the request for retrieving a cache entry
+message GetEntryRequest {
   Provider provider = 1;
   string key = 2;
   string name = 3;
   string branch = 4;
 }
 
-// GetCacheEntryResponse is the response for retrieving a cache entry
-message GetCacheEntryResponse {
+// GetEntryResponse is the response for retrieving a cache entry
+message GetEntryResponse {
   CacheEntry cache_entry = 1;
   repeated CacheDownloadInstruction download_instructions = 2;
   bool multipart = 3;

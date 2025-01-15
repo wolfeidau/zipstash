@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
-	v1 "github.com/wolfeidau/zipstash/api/zipstash/v1"
+	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
 	"github.com/wolfeidau/zipstash/pkg/downloader"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
@@ -53,14 +53,14 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	req := newAuthenticatedProviderRequest(&v1.GetCacheEntryRequest{
+	req := newAuthenticatedProviderRequest(&v1.GetEntryRequest{
 		Key:      c.Key,
 		Name:     repo,
 		Branch:   branch,
 		Provider: convertProviderV1(c.TokenSource),
 	}, token, c.TokenSource, globals.Version)
 
-	getEntryResp, err := cl.GetCacheEntry(ctx, req)
+	getEntryResp, err := cl.GetEntry(ctx, req)
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeNotFound {
 			log.Info().Msg("cache entry not found")

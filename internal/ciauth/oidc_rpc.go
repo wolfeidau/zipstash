@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"connectrpc.com/connect"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,7 +30,21 @@ func NewInterceptorWithConfig(cfg Config) connect.UnaryInterceptorFunc {
 			}
 
 			log.Ctx(ctx).Info().Any("tok", idToken).Msg("token")
+
+			// store the token in the context
+			ctx = context.WithValue(ctx, idTokenKey{}, idToken)
+
 			return next(ctx, req)
 		}
 	}
+}
+
+type idTokenKey struct{}
+
+func GetIDToken(ctx context.Context) *oidc.IDToken {
+	idToken, ok := ctx.Value(idTokenKey{}).(*oidc.IDToken)
+	if !ok {
+		return nil
+	}
+	return idToken
 }

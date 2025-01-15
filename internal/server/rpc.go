@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
 
-	v1 "github.com/wolfeidau/zipstash/api/zipstash/v1"
+	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/internal/index"
 )
 
@@ -26,7 +26,7 @@ const (
 	cacheRecordTTL         = 24 * time.Hour
 )
 
-type ZipStashServiceHandler struct {
+type CacheServiceHandler struct {
 	s3Client  *s3.Client
 	ddbClient *dynamodb.Client
 	presigner *Presigner
@@ -34,10 +34,10 @@ type ZipStashServiceHandler struct {
 	cfg       Config
 }
 
-func NewZipStashServiceHandler(ctx context.Context, cfg Config) *ZipStashServiceHandler {
+func NewCacheServiceHandler(ctx context.Context, cfg Config) *CacheServiceHandler {
 	s3Client := cfg.GetS3Client()
 	ddbClient := cfg.GetDynamoDBClient()
-	return &ZipStashServiceHandler{
+	return &CacheServiceHandler{
 		s3Client:  s3Client,
 		ddbClient: ddbClient,
 		presigner: NewPresigner(s3Client, cfg),
@@ -49,9 +49,9 @@ func NewZipStashServiceHandler(ctx context.Context, cfg Config) *ZipStashService
 	}
 }
 
-func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createReq *connect.Request[v1.CreateCacheEntryRequest]) (*connect.Response[v1.CreateCacheEntryResponse], error) {
+func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *connect.Request[v1.CreateEntryRequest]) (*connect.Response[v1.CreateEntryResponse], error) {
 	span := trace.SpanFromContext(ctx)
-	span.SetName("ZipStash.CreateCacheEntry")
+	span.SetName("Cache.CreateEntry")
 	defer span.End()
 
 	prefix := path.Join(createReq.Msg.CacheEntry.Name, createReq.Msg.CacheEntry.Branch)
@@ -69,14 +69,14 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 	exists, cacheRec, err := zs.store.ExistsCache(ctx, s3key)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
 	if exists {
 		log.Info().Msg("cache entry already exists")
 		if cacheRec.Sha256 == createReq.Msg.CacheEntry.Sha256Sum {
 			log.Info().Msg("cache entry already exists with matching sha256sum")
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry cache entry already exists"))
+			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("cache.v1.CacheService.CreateEntry cache entry already exists"))
 		}
 	}
 
@@ -92,7 +92,7 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to presign upload")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
 	// create/update the cache entry in the cache index
@@ -110,19 +110,19 @@ func (zs *ZipStashServiceHandler) CreateCacheEntry(ctx context.Context, createRe
 	}, cacheRecordInflightTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create cache entry")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
-	return connect.NewResponse(&v1.CreateCacheEntryResponse{
+	return connect.NewResponse(&v1.CreateEntryResponse{
 		Id:                 uploadID,
 		Multipart:          uploadInstructs.Multipart,
 		UploadInstructions: fromUploadInstructions(uploadInstructs.UploadInstructions),
 	}), nil
 }
 
-func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateReq *connect.Request[v1.UpdateCacheEntryRequest]) (*connect.Response[v1.UpdateCacheEntryResponse], error) {
+func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.UpdateEntryResponse], error) {
 	span := trace.SpanFromContext(ctx)
-	span.SetName("ZipStash.UpdateCacheEntry")
+	span.SetName("Cache.UpdateEntry")
 	defer span.End()
 
 	prefix := path.Join(updateReq.Msg.Name, updateReq.Msg.Branch)
@@ -132,12 +132,12 @@ func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateRe
 	exists, record, err := zs.store.ExistsCache(ctx, strings.Join([]string{s3key, updateReq.Msg.Id}, "##"))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
 	}
 
 	if !exists {
 		log.Info().Msg("cache entry does not exist")
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.UpdateCacheEntry cache entry does not exist"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.UpdateEntry cache entry does not exist"))
 	}
 
 	log.Info().
@@ -159,7 +159,7 @@ func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateRe
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("failed to complete multipart upload")
-			return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.UpdateCacheEntry internal error"))
+			return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
 		}
 	}
 
@@ -177,17 +177,17 @@ func (zs *ZipStashServiceHandler) UpdateCacheEntry(ctx context.Context, updateRe
 	}, cacheRecordTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update cache entry")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
 	}
 
-	return connect.NewResponse(&v1.UpdateCacheEntryResponse{
+	return connect.NewResponse(&v1.UpdateEntryResponse{
 		Id: updateReq.Msg.Id,
 	}), nil
 }
 
-func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *connect.Request[v1.GetCacheEntryRequest]) (*connect.Response[v1.GetCacheEntryResponse], error) {
+func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error) {
 	span := trace.SpanFromContext(ctx)
-	span.SetName("ZipStash.GetCacheEntryByKey")
+	span.SetName("Cache.GetEntry")
 	defer span.End()
 
 	prefix := path.Join(getReq.Msg.Name, getReq.Msg.Branch)
@@ -202,22 +202,22 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 	exists, record, err := zs.store.ExistsCache(ctx, s3key)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.CreateCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
 	}
 
 	if !exists {
 		log.Info().Msg("cache entry does not exist")
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.UpdateCacheEntry cache entry does not exist"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.GetEntry cache entry does not exist"))
 	}
 
 	exists, res, err := zs.exists(ctx, getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get cache entry")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.GetCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
 	}
 
 	if !exists {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("zipstash.v1.ZipStashService.GetCacheEntry not found"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.GetEntry not found"))
 	}
 
 	log.Info().
@@ -232,10 +232,10 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to presign download")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("zipstash.v1.ZipStashService.GetCacheEntry internal error"))
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
 	}
 
-	return connect.NewResponse(&v1.GetCacheEntryResponse{
+	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
 			Key:         getReq.Msg.Key,
 			Name:        getReq.Msg.Name,
@@ -249,7 +249,7 @@ func (zs *ZipStashServiceHandler) GetCacheEntry(ctx context.Context, getReq *con
 	}), nil
 }
 
-func (zs *ZipStashServiceHandler) exists(ctx context.Context, name, branch, key string) (bool, *s3.HeadObjectOutput, error) {
+func (zs *CacheServiceHandler) exists(ctx context.Context, name, branch, key string) (bool, *s3.HeadObjectOutput, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetName("ZipStash.exists")
 	defer span.End()

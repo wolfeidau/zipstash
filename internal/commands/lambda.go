@@ -18,7 +18,7 @@ import (
 	"github.com/wolfeidau/lambda-go-extras/middleware/raw"
 	zlog "github.com/wolfeidau/lambda-go-extras/middleware/zerolog"
 
-	"github.com/wolfeidau/zipstash/api/zipstash/v1/zipstashv1connect"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
@@ -65,14 +65,14 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}
 	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
-	zs := server.NewZipStashServiceHandler(ctx, server.Config{
+	csh := server.NewCacheServiceHandler(ctx, server.Config{
 		CacheBucket:       s.CacheBucket,
 		CacheIndexTable:   s.CacheIndexTable,
 		GetS3Client:       s3ClientFunc,
 		GetDynamoDBClient: ddbClientFunc,
 	})
 	mux := http.NewServeMux()
-	path, handler := zipstashv1connect.NewZipStashServiceHandler(zs, opts...)
+	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
 	mux.Handle(path, handler)
 
 	flds := lmw.FieldMap{"version": "dev"}
