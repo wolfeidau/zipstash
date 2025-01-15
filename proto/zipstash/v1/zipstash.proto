@@ -11,25 +11,13 @@ option go_package = "github.com/zipstash/api/v1;zipstashv1";
 // ZipStashService provides cache management operations
 service ZipStashService {
   // CreateCacheEntry creates a new cache entry
-  rpc CreateCacheEntry(CreateCacheEntryRequest) returns (CreateCacheEntryResponse) {
-    option (google.api.http) = {
-      post: "/v1/cache/{provider}"
-      body: "*"
-    };
-  }
+  rpc CreateCacheEntry(CreateCacheEntryRequest) returns (CreateCacheEntryResponse) {}
 
   // UpdateCacheEntry updates an existing cache entry
-  rpc UpdateCacheEntry(UpdateCacheEntryRequest) returns (UpdateCacheEntryResponse) {
-    option (google.api.http) = {
-      put: "/v1/cache/{provider}"
-      body: "*"
-    };
-  }
+  rpc UpdateCacheEntry(UpdateCacheEntryRequest) returns (UpdateCacheEntryResponse) {}
 
   // GetCacheEntry retrieves a cache entry by key
-  rpc GetCacheEntry(GetCacheEntryRequest) returns (GetCacheEntryResponse) {
-    option (google.api.http) = {get: "/v1/cache/{provider}/{key}"};
-  }
+  rpc GetCacheEntry(GetCacheEntryRequest) returns (GetCacheEntryResponse) {}
 }
 
 // Error represents an error response

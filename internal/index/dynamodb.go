@@ -19,17 +19,6 @@ var (
 	ErrNotFound = errors.New("not found")
 )
 
-type CacheRecord struct {
-	ID          string    `json:"id"`
-	Paths       string    `json:"path"`
-	Name        string    `json:"name"`
-	Branch      string    `json:"branch"`
-	TokenSource string    `json:"token_source"`
-	Sha256      string    `json:"sha256"`
-	FileSize    int64     `json:"file_size"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
 type StoreConfig struct {
 	TableName string
 	Create    bool
@@ -56,7 +45,7 @@ func MustNewStore(ctx context.Context, dynamodbClient *dynamodb.Client, config S
 	return s
 }
 
-func (s *Store) Get(ctx context.Context, id string) (CacheRecord, error) {
+func (s *Store) GetCache(ctx context.Context, id string) (CacheRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.Get")
 	defer span.End()
 
@@ -72,7 +61,7 @@ func (s *Store) Get(ctx context.Context, id string) (CacheRecord, error) {
 	return cacheRec, err
 }
 
-func (s *Store) Exists(ctx context.Context, id string) (bool, CacheRecord, error) {
+func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.Get")
 	defer span.End()
 
@@ -88,19 +77,21 @@ func (s *Store) Exists(ctx context.Context, id string) (bool, CacheRecord, error
 	return true, cacheRec, err
 }
 
-func (s *Store) Put(ctx context.Context, id string, value CacheRecord) error {
+func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, lifetime time.Duration) error {
 	ctx, span := trace.Start(ctx, "Store.Put")
 	defer span.End()
 
 	_, err := s.dynamodb.Create(ctx, "cache", id, value,
-		s.dynamodb.WriteWithCreateConstraintDisabled(true))
+		s.dynamodb.WriteWithCreateConstraintDisabled(true),
+		s.dynamodb.WriteWithTTL(lifetime),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to put cache record: %w", err)
 	}
 
 	return err
 }
-func (s *Store) Delete(ctx context.Context, id string) error {
+func (s *Store) DeleteCache(ctx context.Context, id string) error {
 	ctx, span := trace.Start(ctx, "Store.Delete")
 	defer span.End()
 

@@ -60,6 +60,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 		}
 
 		return &UploadInstructionsResp{
+			Multipart: false,
 			UploadInstructions: []CacheURLInstruction{
 				{
 					Url:    req.URL,
@@ -108,7 +109,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 	return &UploadInstructionsResp{
 		UploadInstructions: reqs,
 		Multipart:          true,
-		MultipartUploadId:  aws.ToString(createMultiResp.UploadId),
+		MultipartUploadId:  createMultiResp.UploadId,
 	}, nil
 }
 
@@ -186,7 +187,7 @@ type CacheURLInstruction struct {
 type UploadInstructionsResp struct {
 	UploadInstructions []CacheURLInstruction
 	Multipart          bool
-	MultipartUploadId  string
+	MultipartUploadId  *string
 }
 
 type DownloadInstructionsResp struct {
