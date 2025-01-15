@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/otelconnect"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/rs/zerolog/log"
@@ -24,7 +25,8 @@ import (
 )
 
 type LambdaServerCmd struct {
-	CacheBucket string `help:"bucket to store cache" env:"CACHE_BUCKET"`
+	CacheBucket     string `help:"bucket to store cache" env:"CACHE_BUCKET"`
+	CacheIndexTable string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
 }
 
 func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
@@ -46,6 +48,9 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	s3ClientFunc := func() *s3.Client {
 		return s3.NewFromConfig(awscfg)
 	}
+	ddbClientFunc := func() *dynamodb.Client {
+		return dynamodb.NewFromConfig(awscfg)
+	}
 
 	// Add OIDC interceptor
 	opts = append(opts, connect.WithInterceptors(
@@ -61,8 +66,10 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
 	zs := server.NewZipStashServiceHandler(ctx, server.Config{
-		CacheBucket: s.CacheBucket,
-		GetS3Client: s3ClientFunc,
+		CacheBucket:       s.CacheBucket,
+		CacheIndexTable:   s.CacheIndexTable,
+		GetS3Client:       s3ClientFunc,
+		GetDynamoDBClient: ddbClientFunc,
 	})
 	mux := http.NewServeMux()
 	path, handler := zipstashv1connect.NewZipStashServiceHandler(zs, opts...)
