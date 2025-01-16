@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -44,6 +46,9 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	var ddbClientFunc server.DynamoDBClientFunc
 	opts := []connect.HandlerOption{}
 	if s.Local {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).
+			With().Caller().Logger()
+
 		s3ClientFunc = newLocalS3Client(s.S3Endpoint)
 		ddbClientFunc = newLocalDDBClient(s.DynamoEndpoint)
 	} else {
@@ -85,8 +90,11 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		GetS3Client:           s3ClientFunc,
 		GetDynamoDBClient:     ddbClientFunc,
 	})
+
 	mux := http.NewServeMux()
 	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
+
+	log.Info().Str("path", path).Str("add", s.Listen).Msg("serving")
 	mux.Handle(path, handler)
 
 	return http.ListenAndServe(
