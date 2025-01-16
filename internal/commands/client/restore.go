@@ -34,6 +34,13 @@ func (c *RestoreCmd) Run(ctx context.Context, globals *Globals) error {
 	ctx, span := trace.Start(ctx, "RestoreCmd.Run")
 	defer span.End()
 
+	span.SetAttributes(
+		attribute.String("key", c.Key),
+		attribute.String("path", c.Path),
+		attribute.Bool("clean", c.Clean),
+		attribute.String("token_source", c.TokenSource),
+	)
+
 	return c.restore(ctx, globals)
 }
 

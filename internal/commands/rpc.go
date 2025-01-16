@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -64,7 +65,10 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		))
 	}
 
-	otelInterceptor, err := otelconnect.NewInterceptor(otelconnect.WithTracerProvider(tp))
+	otelInterceptor, err := otelconnect.NewInterceptor(
+		otelconnect.WithTracerProvider(tp),
+		otelconnect.WithPropagator(otel.GetTextMapPropagator()),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}
