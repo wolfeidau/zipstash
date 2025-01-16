@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -27,6 +26,7 @@ type RPCServerCmd struct {
 	CacheIndexTable       string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
 	CreateCacheIndexTable bool   `help:"create cache index table if it does not exist" env:"CREATE_CACHE_INDEX_TABLE" default:"false"`
 	Local                 bool   `help:"run in local mode"`
+	TrustRemote           bool   `help:"trust remote spans"`
 	S3Endpoint            string `help:"s3 endpoint, used in local mode" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
 	DynamoEndpoint        string `help:"s3 endpoint, used in local mode" env:"DYNAMO_ENDPOINT" default:"http://dynamodb-local.zipstash.orb.local:8000"`
 }
@@ -63,12 +63,16 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 				Providers: ciauth.DefaultProviderEndpoints,
 			}),
 		))
+
 	}
 
-	otelInterceptor, err := otelconnect.NewInterceptor(
-		otelconnect.WithTracerProvider(tp),
-		otelconnect.WithPropagator(otel.GetTextMapPropagator()),
-	)
+	var oteloptions []otelconnect.Option
+	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
+	if s.TrustRemote {
+		oteloptions = append(oteloptions, otelconnect.WithTrustRemote())
+	}
+
+	otelInterceptor, err := otelconnect.NewInterceptor(oteloptions...)
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}

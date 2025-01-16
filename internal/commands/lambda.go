@@ -27,6 +27,7 @@ import (
 type LambdaServerCmd struct {
 	CacheBucket     string `help:"bucket to store cache" env:"CACHE_BUCKET"`
 	CacheIndexTable string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
+	TrustRemote     bool   `help:"trust remote spans"`
 }
 
 func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
@@ -59,7 +60,13 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		}),
 	))
 
-	otelInterceptor, err := otelconnect.NewInterceptor(otelconnect.WithTracerProvider(tp))
+	var oteloptions []otelconnect.Option
+	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
+	if s.TrustRemote {
+		oteloptions = append(oteloptions, otelconnect.WithTrustRemote())
+	}
+
+	otelInterceptor, err := otelconnect.NewInterceptor(oteloptions...)
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}
