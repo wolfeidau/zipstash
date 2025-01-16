@@ -81,6 +81,7 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	mux := http.NewServeMux()
 	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
 	mux.Handle(path, handler)
+	log.Info().Str("path", path).Msg("serving")
 
 	flds := lmw.FieldMap{"version": "dev"}
 

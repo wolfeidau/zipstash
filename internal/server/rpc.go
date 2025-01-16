@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
+	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
 )
 
@@ -95,9 +96,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
-	// create/update the cache entry in the cache index
-	// TODO: should we store this record after generating the upload instructions? So we can put the upload ID in the record and validate the upload ID when the upload is complete?
-	err = zs.store.PutCache(ctx, strings.Join([]string{s3key, uploadID}, "##"), index.CacheRecord{
+	cacheRec = index.CacheRecord{
 		ID:                createReq.Msg.CacheEntry.Key,
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
 		Name:              createReq.Msg.CacheEntry.Name,
@@ -107,7 +106,20 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		MultipartUploadId: uploadInstructs.MultipartUploadId,
 		FileSize:          createReq.Msg.CacheEntry.FileSize,
 		UpdatedAt:         time.Now(),
-	}, cacheRecordInflightTTL)
+	}
+
+	id := ciauth.GetCIAuthIdentity(ctx)
+	if id != nil {
+		cacheRec.Identity = &index.Identity{
+			Subject:  id.IDToken.Subject,
+			Issuer:   id.IDToken.Issuer,
+			Audience: id.IDToken.Audience,
+		}
+	}
+
+	// create/update the cache entry in the cache index
+	// TODO: should we store this record after generating the upload instructions? So we can put the upload ID in the record and validate the upload ID when the upload is complete?
+	err = zs.store.PutCache(ctx, strings.Join([]string{s3key, uploadID}, "##"), cacheRec, cacheRecordInflightTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
@@ -129,7 +141,7 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	s3key := path.Join(prefix, updateReq.Msg.Key)
 
 	// does the in flight cache entry exist?
-	exists, record, err := zs.store.ExistsCache(ctx, strings.Join([]string{s3key, updateReq.Msg.Id}, "##"))
+	exists, cacheRec, err := zs.store.ExistsCache(ctx, strings.Join([]string{s3key, updateReq.Msg.Id}, "##"))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
@@ -148,11 +160,11 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		Msg("cache entry update request")
 
 	// complete the multipart upload if it exists and the upload ID matches
-	if record.MultipartUploadId != nil {
+	if cacheRec.MultipartUploadId != nil {
 		_, err := zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(zs.cfg.CacheBucket),
 			Key:      aws.String(s3key),
-			UploadId: record.MultipartUploadId,
+			UploadId: cacheRec.MultipartUploadId,
 			MultipartUpload: &types.CompletedMultipartUpload{
 				Parts: fromCachePartETagV1(updateReq.Msg.MultipartEtags),
 			},
@@ -163,18 +175,11 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		}
 	}
 
+	// update the cache entry in the cache index
+	cacheRec.UpdatedAt = time.Now()
+
 	// move the inflight cache entry to the cache index
-	err = zs.store.PutCache(ctx, s3key, index.CacheRecord{
-		ID:                record.ID,
-		Paths:             record.Paths,
-		Name:              record.Name,
-		Branch:            record.Branch,
-		Sha256:            record.Sha256,
-		MultipartUploadId: record.MultipartUploadId,
-		FileSize:          record.FileSize,
-		Compression:       record.Compression,
-		UpdatedAt:         time.Now(),
-	}, cacheRecordTTL)
+	err = zs.store.PutCache(ctx, s3key, cacheRec, cacheRecordTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
