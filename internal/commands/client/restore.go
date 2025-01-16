@@ -122,7 +122,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 			}
 
 			log.Info().Str("path", path).Msg("cleaning path")
-			err = removeAll(path)
+			err = cleanPath(ctx, path)
 			if err != nil {
 				return fmt.Errorf("failed to clean path: %w", err)
 			}
@@ -144,7 +144,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 // pass in a list of paths and turn them into a zip file stream to enable extraction
 func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*os.File, int64, error) {
-	_, span := trace.Start(ctx, "combineParts")
+	ctx, span := trace.Start(ctx, "combineParts")
 	defer span.End()
 
 	zipFile, err := os.CreateTemp("", "zipstash-download-*.zip")
@@ -155,7 +155,7 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 	zipFileLen := int64(0)
 
 	for _, d := range downloads {
-		n, err := appendToFileAndRemove(zipFile, d.FilePath)
+		n, err := appendToFileAndRemove(ctx, zipFile, d.FilePath)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to write file: %w", err)
 		}
@@ -167,7 +167,10 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 	return zipFile, zipFileLen, nil
 }
 
-func appendToFileAndRemove(f *os.File, path string) (int64, error) {
+func appendToFileAndRemove(ctx context.Context, f *os.File, path string) (int64, error) {
+	_, span := trace.Start(ctx, "appendToFileAndRemove")
+	defer span.End()
+
 	pf, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file: %w", err)
@@ -221,9 +224,12 @@ func convertProviderV1(tokenSource string) v1.Provider {
 	}
 }
 
-// RemoveAll removes a directory written by Download or Unzip, first applying
+// cleanPath removes a directory written by Download or Unzip, first applying
 // any permission changes needed to do so.
-func removeAll(dir string) error {
+func cleanPath(ctx context.Context, dir string) error {
+	_, span := trace.Start(ctx, "cleanPath")
+	defer span.End()
+
 	log.Info().Str("path", dir).Msg("changing permissions")
 
 	// Module cache has 0555 directories; make them writable in order to remove content.
