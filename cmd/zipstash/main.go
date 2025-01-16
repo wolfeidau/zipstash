@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"os"
 
+	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/alecthomas/kong"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
@@ -42,7 +44,10 @@ func main() {
 		_ = tp.Shutdown(ctx)
 	}()
 
-	otelInterceptor, err := otelconnect.NewInterceptor()
+	otelInterceptor, err := otelconnect.NewInterceptor(
+		otelconnect.WithTracerProvider(tp),
+		otelconnect.WithPropagator(otel.GetTextMapPropagator()),
+	)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create otel interceptor")
 	}
@@ -71,5 +76,5 @@ func enableDebug(debug bool) {
 }
 
 func buildClient(endpoint string, otelInterceptor *otelconnect.Interceptor) cachev1connect.CacheServiceClient {
-	return cachev1connect.NewCacheServiceClient(http.DefaultClient, endpoint)
+	return cachev1connect.NewCacheServiceClient(http.DefaultClient, endpoint, connect.WithInterceptors(otelInterceptor))
 }

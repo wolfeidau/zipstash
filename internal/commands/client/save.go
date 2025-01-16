@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
@@ -19,6 +20,7 @@ import (
 type SaveCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
+	Skip        bool   `help:"Skip saving the cache entry." env:"INPUT_SKIP"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
 	GitHub      GitHub `embed:"" prefix:"github_"`
 	Local       Local  `embed:"" prefix:"local_"`
@@ -27,6 +29,18 @@ type SaveCmd struct {
 func (c *SaveCmd) Run(ctx context.Context, globals *Globals) error {
 	ctx, span := trace.Start(ctx, "SaveCmd.Run")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("key", c.Key),
+		attribute.String("path", c.Path),
+		attribute.Bool("skip", c.Skip),
+		attribute.String("token_source", c.TokenSource),
+	)
+
+	if c.Skip {
+		log.Info().Msg("skipping save")
+		return nil
+	}
 
 	return c.save(ctx, globals)
 }

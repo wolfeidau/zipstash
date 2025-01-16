@@ -76,3 +76,9 @@ func verifyWithProvider(ctx context.Context, token string, prov *oidc.Provider) 
 		SkipClientIDCheck: true,
 	}).Verify(ctx, token)
 }
+
+type CIAuthIdentity struct {
+	Provider string
+	Subject  string
+	IDToken  *oidc.IDToken
+}
