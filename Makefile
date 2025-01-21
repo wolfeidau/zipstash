@@ -54,7 +54,9 @@ deploy-api:
 		--tags "environment=$(STAGE)" "branch=$(BRANCH)" "application=$(APPNAME)" \
 		--stack-name $(APPNAME)-$(STAGE)-$(BRANCH)-api \
 		--parameter-overrides AppName=$(APPNAME) Stage=$(STAGE) Branch=$(BRANCH) \
-			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH}
+			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH} \
+			OtelExporterEndpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT) \
+			OtelExporterToken=$(OTEL_EXPORTER_TOKEN)
 
 .PHONY: logs
 logs:

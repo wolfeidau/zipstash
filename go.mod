@@ -19,7 +19,7 @@ require (
 	github.com/klauspost/compress v1.17.11
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
-	github.com/wolfeidau/dynastorev2 v0.4.0
+	github.com/wolfeidau/dynastorev2 v0.5.0
 	github.com/wolfeidau/lambda-go-extras v1.5.1
 	github.com/wolfeidau/lambda-go-extras/middleware/raw v1.5.1
 	github.com/wolfeidau/lambda-go-extras/middleware/zerolog v1.5.1

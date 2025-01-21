@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package provision.v1;
+
+import "provider/v1/provider.proto";
+
+// ProvisionService provides APIs for provisioning and managing tenants
+service ProvisionService {
+  // CreateTenant creates a new tenant with the specified configuration
+  // including provider settings and optional CI/CD integrations
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse) {}
+}
+
+/// CreateTenantRequest is the request message for the CreateTenant RPC.
+/// It contains the configuration details for provisioning a new tenant,
+/// including the provider settings and optional CI/CD integrations.
+message CreateTenantRequest {
+  string id = 1;
+  provider.v1.Provider provider_type = 2;
+
+  oneof provider {
+    provider.v1.GitHubActions github_actions = 3;
+    provider.v1.GitLab gitlab = 4;
+    provider.v1.Buildkite buildkite = 5;
+  }
+}
+
+message CreateTenantResponse {
+  string id = 1;
+}

@@ -7,8 +7,17 @@ import (
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/wolfeidau/zipstash/pkg/trace"
+)
+
+type Config struct {
+	Providers map[string]string
+}
+
+var (
+	ErrInvalidProvider = errors.New("invalid provider")
 )
 
 func NewInterceptorWithConfig(cfg Config) connect.UnaryInterceptorFunc {
@@ -21,16 +30,19 @@ func NewInterceptorWithConfig(cfg Config) connect.UnaryInterceptorFunc {
 
 			rawIDToken, err := extractBearerToken(req.Header())
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return nil, connect.NewError(connect.CodeUnauthenticated, err)
 			}
 
 			providerName := req.Header().Get("X-Provider")
 			if providerName == "" {
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("missing provider"))
+				span.SetStatus(codes.Error, ErrInvalidProvider.Error())
+				return nil, connect.NewError(connect.CodeUnauthenticated, ErrInvalidProvider)
 			}
 
 			idToken, err := providers.VerifyToken(ctx, providerName, rawIDToken)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				return nil, connect.NewError(connect.CodeUnauthenticated, err)
 			}
 

@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/exp/slices"
 
-	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
+	cachev1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
 	"github.com/wolfeidau/zipstash/pkg/downloader"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
@@ -26,8 +26,9 @@ type RestoreCmd struct {
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
 	Clean       bool   `help:"clean the path before restore" env:"INPUT_CLEAN"`
-	GitHub      GitHub `embed:"" prefix:"github_"`
-	Local       Local  `embed:"" prefix:"local_"`
+	Branch      string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" required:""`
+	Name        string `help:"repository, project or pipeline name to use for the cache entry" env:"INPUT_REPOSITORY" required:""`
+	Owner       string `help:"owner of the cache entry" env:"INPUT_OWNER"`
 }
 
 func (c *RestoreCmd) Run(ctx context.Context, globals *Globals) error {
@@ -50,21 +51,17 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	cl := globals.Client
 
-	repo, branch, err := getRepoAndBranch(c.GitHub, c.Local)
-	if err != nil {
-		return fmt.Errorf("failed to get repo and branch: %w", err)
-	}
-
 	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	req := newAuthenticatedProviderRequest(&v1.GetEntryRequest{
-		Key:      c.Key,
-		Name:     repo,
-		Branch:   branch,
-		Provider: convertProviderV1(c.TokenSource),
+	req := newAuthenticatedProviderRequest(&cachev1.GetEntryRequest{
+		Key:          c.Key,
+		Name:         c.Name,
+		Branch:       c.Branch,
+		ProviderType: convertProviderTypeV1(c.TokenSource),
+		Owner:        c.Owner,
 	}, token, c.TokenSource, globals.Version)
 
 	getEntryResp, err := cl.GetEntry(ctx, req)
@@ -187,7 +184,7 @@ func appendToFileAndRemove(ctx context.Context, f *os.File, path string) (int64,
 	return n, nil
 }
 
-func convertToDownloadInstructions(instructs []*v1.CacheDownloadInstruction) []downloader.CacheDownloadInstruction {
+func convertToDownloadInstructions(instructs []*cachev1.CacheDownloadInstruction) []downloader.CacheDownloadInstruction {
 	res := make([]downloader.CacheDownloadInstruction, len(instructs))
 
 	for i, downloadInstruct := range instructs {
@@ -209,19 +206,6 @@ func convertToDownloadInstructions(instructs []*v1.CacheDownloadInstruction) []d
 	}
 
 	return res
-}
-
-func convertProviderV1(tokenSource string) v1.Provider {
-	switch tokenSource {
-	case "github_actions":
-		return v1.Provider_PROVIDER_GITHUB_ACTIONS
-	case "buildkite":
-		return v1.Provider_PROVIDER_BUILDKITE
-	case "gitlab":
-		return v1.Provider_PROVIDER_GITLAB
-	default:
-		return v1.Provider_PROVIDER_UNSPECIFIED
-	}
 }
 
 // cleanPath removes a directory written by Download or Unzip, first applying

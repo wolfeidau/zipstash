@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	transport "github.com/aws/smithy-go/endpoints"
+	"github.com/wolfeidau/zipstash/internal/index"
 	"github.com/wolfeidau/zipstash/internal/server"
 )
 
@@ -43,7 +44,7 @@ func newLocalS3Client(endpoint string) server.S3ClientFunc {
 	}
 }
 
-func newLocalDDBClient(endpoint string) server.DynamoDBClientFunc {
+func newLocalDDBClient(endpoint string) index.DynamoDBClientFunc {
 	return func() *dynamodb.Client {
 		return dynamodb.New(dynamodb.Options{
 			EndpointResolver: dynamodb.EndpointResolverFromURL(endpoint),

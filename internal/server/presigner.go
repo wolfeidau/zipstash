@@ -23,16 +23,16 @@ const (
 type Presigner struct {
 	s3client        *s3.Client
 	presignS3Client *s3.PresignClient
-	cfg             Config
+	cacheBucket     string
 }
 
-func NewPresigner(s3client *s3.Client, cfg Config) *Presigner {
+func NewPresigner(s3client *s3.Client, cacheBucket string) *Presigner {
 	presignS3Client := s3.NewPresignClient(s3client)
 
 	return &Presigner{
 		s3client:        s3client,
 		presignS3Client: presignS3Client,
-		cfg:             cfg,
+		cacheBucket:     cacheBucket,
 	}
 }
 
@@ -47,7 +47,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignPutObject(ctx, &s3.PutObjectInput{
-			Bucket:         aws.String(p.cfg.CacheBucket),
+			Bucket:         aws.String(p.cacheBucket),
 			Key:            aws.String(s3key),
 			ChecksumSHA256: aws.String(convertSha256ToBase64(sha256sum)),
 			ContentType:    aws.String(compressionToContentType(compression)),
@@ -71,7 +71,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 	}
 
 	createMultiResp, err := p.s3client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
-		Bucket:      aws.String(p.cfg.CacheBucket),
+		Bucket:      aws.String(p.cacheBucket),
 		Key:         aws.String(s3key),
 		ContentType: aws.String(compressionToContentType(compression)),
 	})
@@ -88,7 +88,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket:         aws.String(p.cfg.CacheBucket),
+			Bucket:         aws.String(p.cacheBucket),
 			Key:            aws.String(s3key),
 			PartNumber:     aws.Int32(offset.Part),
 			UploadId:       createMultiResp.UploadId,
@@ -125,7 +125,7 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, s3key 
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 	if totalSize < MinPartSize {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(p.cfg.CacheBucket),
+			Bucket: aws.String(p.cacheBucket),
 			Key:    aws.String(s3key),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
@@ -150,7 +150,7 @@ func (p *Presigner) GenerateFileDownloadInstructions(ctx context.Context, s3key 
 	reqs := make([]CacheURLInstruction, 0, len(offsets))
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignGetObject(ctx, &s3.GetObjectInput{
-			Bucket: aws.String(p.cfg.CacheBucket),
+			Bucket: aws.String(p.cacheBucket),
 			Key:    aws.String(s3key),
 			Range:  aws.String(fmt.Sprintf("bytes=%d-%d", offset.Start, offset.End)),
 		}, func(opts *s3.PresignOptions) {

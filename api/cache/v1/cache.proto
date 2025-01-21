@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package cache.v1;
 
-import "google/api/annotations.proto";
+// import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
+import "provider/v1/provider.proto";
 
 // CacheService provides cache management operations
 service CacheService {
@@ -23,23 +24,15 @@ message Error {
   google.rpc.Status status = 1;
 }
 
-// Provider represents supported CI/CD providers
-enum Provider {
-  PROVIDER_UNSPECIFIED = 0;
-  PROVIDER_GITHUB_ACTIONS = 1;
-  PROVIDER_GITLAB = 2;
-  PROVIDER_BUILDKITE = 3;
-}
-
 // Entry represents a cache entry in the system
 message CacheEntry {
   string key = 1;
   int64 file_size = 2;
-  string name = 3;
-  string branch = 4;
-  string compression = 5;
-  string sha256sum = 6;
-  string url = 7;
+  string owner = 3;
+  string name = 4;
+  string branch = 5;
+  string compression = 6;
+  string sha256sum = 7;
   repeated string paths = 8;
   google.protobuf.Timestamp entry_created = 9;
 }
@@ -74,7 +67,7 @@ message CachePartETag {
 
 // CreateEntryRequest is the request for creating a cache entry
 message CreateEntryRequest {
-  Provider provider = 1;
+  provider.v1.Provider provider_type = 1;
   CacheEntry cache_entry = 2;
   bool multipart_supported = 3;
 }
@@ -88,12 +81,8 @@ message CreateEntryResponse {
 
 // UpdateEntryRequest is the request for updating a cache entry
 message UpdateEntryRequest {
-  Provider provider = 1;
-  string id = 2;
-  string name = 3;
-  string branch = 4;
-  string key = 5;
-  repeated CachePartETag multipart_etags = 6;
+  string id = 1;
+  repeated CachePartETag multipart_etags = 2;
 }
 
 // UpdateEntryResponse is the response for updating a cache entry
@@ -103,10 +92,11 @@ message UpdateEntryResponse {
 
 // GetEntryRequest is the request for retrieving a cache entry
 message GetEntryRequest {
-  Provider provider = 1;
+  provider.v1.Provider provider_type = 1;
   string key = 2;
   string name = 3;
   string branch = 4;
+  string owner = 5;
 }
 
 // GetEntryResponse is the response for retrieving a cache entry
