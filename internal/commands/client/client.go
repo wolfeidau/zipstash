@@ -2,10 +2,10 @@ package client
 
 import (
 	"bufio"
-	"fmt"
 	"strings"
 
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
+	providerv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provider/v1"
 )
 
 const audience = "zipstash.wolfe.id.au"
@@ -25,24 +25,15 @@ func SplitLines(s string) []string {
 	return lines
 }
 
-type Local struct {
-	Branch     string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" and:"local"`
-	Repository string `help:"repository to use for the cache entry" env:"INPUT_REPOSITORY" and:"local"`
-}
-
-type GitHub struct {
-	Branch     string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" and:"github"`
-	Repository string `help:"repository to use for the cache entry" env:"INPUT_REPOSITORY" and:"github"`
-}
-
-func getRepoAndBranch(github GitHub, local Local) (string, string, error) {
-	if github.Repository != "" && github.Branch != "" {
-		return github.Repository, github.Branch, nil
+func convertProviderTypeV1(tokenSource string) providerv1.Provider {
+	switch tokenSource {
+	case "github_actions":
+		return providerv1.Provider_PROVIDER_GITHUB_ACTIONS
+	case "buildkite":
+		return providerv1.Provider_PROVIDER_BUILDKITE
+	case "gitlab":
+		return providerv1.Provider_PROVIDER_GITLAB
+	default:
+		return providerv1.Provider_PROVIDER_UNSPECIFIED
 	}
-
-	if local.Repository != "" && local.Branch != "" {
-		return local.Repository, local.Branch, nil
-	}
-
-	return "", "", fmt.Errorf("repository and branch must be provided")
 }

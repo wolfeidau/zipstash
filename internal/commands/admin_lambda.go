@@ -6,11 +6,9 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
-	"connectrpc.com/otelconnect"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/rs/zerolog/log"
 	"github.com/wolfeidau/lambda-go-extras/lambdaextras"
@@ -18,21 +16,18 @@ import (
 	"github.com/wolfeidau/lambda-go-extras/middleware/raw"
 	zlog "github.com/wolfeidau/lambda-go-extras/middleware/zerolog"
 
-	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
-	"github.com/wolfeidau/zipstash/internal/ciauth"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/provision/v1/provisionv1connect"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"github.com/wolfeidau/zipstash/internal/provider"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
-type LambdaServerCmd struct {
-	CacheBucket     string `help:"bucket to store cache" env:"CACHE_BUCKET"`
+type AdminLambdaServerCmd struct {
 	CacheIndexTable string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
 	TrustRemote     bool   `help:"trust remote spans"`
 }
 
-func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
+func (s *AdminLambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
 	if err != nil {
 		log.Fatal().Msgf("failed to create trace provider: %v", err)
@@ -48,43 +43,19 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	s3ClientFunc := func() *s3.Client {
-		return s3.NewFromConfig(awscfg)
-	}
 	ddbClientFunc := func() *dynamodb.Client {
 		return dynamodb.NewFromConfig(awscfg)
 	}
-
-	// Add OIDC interceptor
-	opts = append(opts, connect.WithInterceptors(
-		ciauth.NewInterceptorWithConfig(ciauth.Config{
-			Providers: provider.DefaultEndpoints,
-		}),
-	))
-
-	var oteloptions []otelconnect.Option
-	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
-	if s.TrustRemote {
-		oteloptions = append(oteloptions, otelconnect.WithTrustRemote())
-	}
-
-	otelInterceptor, err := otelconnect.NewInterceptor(oteloptions...)
-	if err != nil {
-		return fmt.Errorf("failed to create otel interceptor: %w", err)
-	}
-	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
 	store := index.MustNewStore(ctx, index.StoreConfig{
 		CacheIndexTable:   s.CacheIndexTable,
 		GetDynamoDBClient: ddbClientFunc,
 	})
 
-	csh := server.NewCacheServiceHandler(ctx, server.CacheConfig{
-		CacheBucket: s.CacheBucket,
-		GetS3Client: s3ClientFunc,
-	}, store)
+	psh := server.NewProvisionServiceHandler(store)
+
 	mux := http.NewServeMux()
-	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
+	path, handler := provisionv1connect.NewProvisionServiceHandler(psh, opts...)
 	mux.Handle(path, handler)
 	log.Info().Str("path", path).Msg("serving")
 

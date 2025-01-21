@@ -10,7 +10,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
@@ -27,26 +26,27 @@ const (
 	cacheRecordTTL         = 24 * time.Hour
 )
 
-type CacheServiceHandler struct {
-	s3Client  *s3.Client
-	ddbClient *dynamodb.Client
-	presigner *Presigner
-	store     *index.Store
-	cfg       Config
+type CacheConfig struct {
+	CacheBucket string
+	GetS3Client S3ClientFunc
 }
 
-func NewCacheServiceHandler(ctx context.Context, cfg Config) *CacheServiceHandler {
+type S3ClientFunc func() *s3.Client
+
+type CacheServiceHandler struct {
+	s3Client  *s3.Client
+	presigner *Presigner
+	store     *index.Store
+	cfg       CacheConfig
+}
+
+func NewCacheServiceHandler(ctx context.Context, cfg CacheConfig, store *index.Store) *CacheServiceHandler {
 	s3Client := cfg.GetS3Client()
-	ddbClient := cfg.GetDynamoDBClient()
 	return &CacheServiceHandler{
 		s3Client:  s3Client,
-		ddbClient: ddbClient,
-		presigner: NewPresigner(s3Client, cfg),
-		store: index.MustNewStore(ctx, ddbClient, index.StoreConfig{
-			TableName: cfg.CacheIndexTable,
-			Create:    cfg.CreateCacheIndexTable,
-		}),
-		cfg: cfg,
+		presigner: NewPresigner(s3Client, cfg.CacheBucket),
+		store:     store,
+		cfg:       cfg,
 	}
 }
 
@@ -55,7 +55,12 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	span.SetName("Cache.CreateEntry")
 	defer span.End()
 
-	prefix := path.Join(createReq.Msg.CacheEntry.Name, createReq.Msg.CacheEntry.Branch)
+	// TODO: validate the name and branch
+	name := createReq.Msg.CacheEntry.Name
+	branch := createReq.Msg.CacheEntry.Branch
+	owner := createReq.Msg.CacheEntry.Owner
+
+	prefix := path.Join(name, branch)
 	s3key := path.Join(prefix, createReq.Msg.CacheEntry.Key)
 
 	log.Info().
@@ -99,8 +104,10 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	cacheRec = index.CacheRecord{
 		ID:                createReq.Msg.CacheEntry.Key,
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
-		Name:              createReq.Msg.CacheEntry.Name,
-		Branch:            createReq.Msg.CacheEntry.Branch,
+		Name:              name,
+		Branch:            branch,
+		Owner:             owner,
+		Provider:          createReq.Msg.ProviderType.String(),
 		Sha256:            createReq.Msg.CacheEntry.Sha256Sum,
 		Compression:       createReq.Msg.CacheEntry.Compression,
 		MultipartUploadId: uploadInstructs.MultipartUploadId,
@@ -119,7 +126,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 
 	// create/update the cache entry in the cache index
 	// TODO: should we store this record after generating the upload instructions? So we can put the upload ID in the record and validate the upload ID when the upload is complete?
-	err = zs.store.PutCache(ctx, strings.Join([]string{s3key, uploadID}, "##"), cacheRec, cacheRecordInflightTTL)
+	err = zs.store.PutCache(ctx, uploadID, cacheRec, cacheRecordInflightTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
@@ -137,11 +144,8 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	span.SetName("Cache.UpdateEntry")
 	defer span.End()
 
-	prefix := path.Join(updateReq.Msg.Name, updateReq.Msg.Branch)
-	s3key := path.Join(prefix, updateReq.Msg.Key)
-
 	// does the in flight cache entry exist?
-	exists, cacheRec, err := zs.store.ExistsCache(ctx, strings.Join([]string{s3key, updateReq.Msg.Id}, "##"))
+	exists, cacheRec, err := zs.store.ExistsCache(ctx, updateReq.Msg.Id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
@@ -152,10 +156,13 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.UpdateEntry cache entry does not exist"))
 	}
 
+	prefix := path.Join(cacheRec.Name, cacheRec.Branch)
+	s3key := path.Join(prefix, cacheRec.ID)
+
 	log.Info().
 		Str("Id", updateReq.Msg.Id).
 		Str("Prefix", prefix).
-		Str("Key", updateReq.Msg.Key).
+		Str("Key", cacheRec.ID).
 		Str("S3Key", s3key).
 		Msg("cache entry update request")
 

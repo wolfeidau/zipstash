@@ -17,7 +17,10 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
+	"github.com/wolfeidau/zipstash/api/gen/proto/go/provision/v1/provisionv1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
+	"github.com/wolfeidau/zipstash/internal/index"
+	"github.com/wolfeidau/zipstash/internal/provider"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -43,7 +46,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}()
 
 	var s3ClientFunc server.S3ClientFunc
-	var ddbClientFunc server.DynamoDBClientFunc
+	var ddbClientFunc index.DynamoDBClientFunc
 	opts := []connect.HandlerOption{}
 	if s.Local {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).
@@ -65,11 +68,17 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 
 		opts = append(opts, connect.WithInterceptors(
 			ciauth.NewInterceptorWithConfig(ciauth.Config{
-				Providers: ciauth.DefaultProviderEndpoints,
+				Providers: provider.DefaultEndpoints,
 			}),
 		))
 
 	}
+
+	store := index.MustNewStore(ctx, index.StoreConfig{
+		CacheIndexTable:   s.CacheIndexTable,
+		Create:            s.CreateCacheIndexTable,
+		GetDynamoDBClient: ddbClientFunc,
+	})
 
 	var oteloptions []otelconnect.Option
 	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
@@ -83,16 +92,20 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}
 	opts = append(opts, connect.WithInterceptors(otelInterceptor))
 
-	csh := server.NewCacheServiceHandler(ctx, server.Config{
-		CacheBucket:           s.CacheBucket,
-		CacheIndexTable:       s.CacheIndexTable,
-		CreateCacheIndexTable: s.CreateCacheIndexTable,
-		GetS3Client:           s3ClientFunc,
-		GetDynamoDBClient:     ddbClientFunc,
-	})
+	csh := server.NewCacheServiceHandler(ctx, server.CacheConfig{
+		CacheBucket: s.CacheBucket,
+		GetS3Client: s3ClientFunc,
+	}, store)
+
+	psh := server.NewProvisionServiceHandler(store)
 
 	mux := http.NewServeMux()
 	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
+
+	log.Info().Str("path", path).Str("add", s.Listen).Msg("serving")
+	mux.Handle(path, handler)
+
+	path, handler = provisionv1connect.NewProvisionServiceHandler(psh, opts...)
 
 	log.Info().Str("path", path).Str("add", s.Listen).Msg("serving")
 	mux.Handle(path, handler)

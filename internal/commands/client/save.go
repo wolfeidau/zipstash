@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 
-	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
+	cachev1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/pkg/archive"
 	"github.com/wolfeidau/zipstash/pkg/tokens"
 	"github.com/wolfeidau/zipstash/pkg/trace"
@@ -22,8 +22,9 @@ type SaveCmd struct {
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	Skip        bool   `help:"Skip saving the cache entry." env:"INPUT_SKIP"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
-	GitHub      GitHub `embed:"" prefix:"github_"`
-	Local       Local  `embed:"" prefix:"local_"`
+	Branch      string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" required:""`
+	Name        string `help:"repository, project or pipeline name to use for the cache entry" env:"INPUT_REPOSITORY" required:""`
+	Owner       string `help:"owner of the cache entry" env:"INPUT_OWNER"`
 }
 
 func (c *SaveCmd) Run(ctx context.Context, globals *Globals) error {
@@ -51,11 +52,6 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 
 	cl := globals.Client
 
-	repo, branch, err := getRepoAndBranch(c.GitHub, c.Local)
-	if err != nil {
-		return fmt.Errorf("failed to get repo and branch: %w", err)
-	}
-
 	paths, err := checkPath(c.Path)
 	if err != nil {
 		return fmt.Errorf("failed to check path: %w", err)
@@ -80,15 +76,17 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	req := newAuthenticatedProviderRequest(&v1.CreateEntryRequest{
-		CacheEntry: &v1.CacheEntry{
+	req := newAuthenticatedProviderRequest(&cachev1.CreateEntryRequest{
+		ProviderType: convertProviderTypeV1(c.TokenSource),
+		CacheEntry: &cachev1.CacheEntry{
 			Key:         c.Key,
 			Compression: "zip",
 			FileSize:    fileInfo.Size,
 			Sha256Sum:   fileInfo.Sha256sum,
 			Paths:       paths,
-			Name:        repo,
-			Branch:      branch,
+			Name:        c.Name,
+			Branch:      c.Branch,
+			Owner:       c.Owner,
 		},
 	}, token, c.TokenSource, globals.Version)
 
@@ -110,11 +108,8 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to upload: %w", err)
 	}
 
-	updateReq := newAuthenticatedProviderRequest(&v1.UpdateEntryRequest{
+	updateReq := newAuthenticatedProviderRequest(&cachev1.UpdateEntryRequest{
 		Id:             createResp.Msg.Id,
-		Name:           repo,
-		Branch:         branch,
-		Key:            c.Key,
 		MultipartEtags: toEtagsV1(etags),
 	}, token, c.TokenSource, globals.Version)
 
@@ -148,7 +143,7 @@ func newAuthenticatedProviderRequest[T any](msg *T, token, provider, version str
 	return req
 }
 
-func toUploadInstructions(instructions []*v1.CacheUploadInstruction) []uploader.CacheUploadInstruction {
+func toUploadInstructions(instructions []*cachev1.CacheUploadInstruction) []uploader.CacheUploadInstruction {
 	uploadInstructions := make([]uploader.CacheUploadInstruction, len(instructions))
 	for i, instruction := range instructions {
 		ui := uploader.CacheUploadInstruction{
@@ -170,10 +165,10 @@ func toUploadInstructions(instructions []*v1.CacheUploadInstruction) []uploader.
 	return uploadInstructions
 }
 
-func toEtagsV1(etags []uploader.CachePartETag) []*v1.CachePartETag {
-	etagV1 := make([]*v1.CachePartETag, len(etags))
+func toEtagsV1(etags []uploader.CachePartETag) []*cachev1.CachePartETag {
+	etagV1 := make([]*cachev1.CachePartETag, len(etags))
 	for i, etag := range etags {
-		etagV1[i] = &v1.CachePartETag{
+		etagV1[i] = &cachev1.CachePartETag{
 			Etag:     etag.Etag,
 			Part:     etag.Part,
 			PartSize: etag.PartSize,

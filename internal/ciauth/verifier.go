@@ -9,20 +9,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const (
-	Buildkite     = "buildkite"
-	GitHubActions = "github_actions"
-	GitLab        = "gitlab"
-)
-
-var (
-	DefaultProviderEndpoints = map[string]string{
-		GitHubActions: "https://token.actions.githubusercontent.com",
-		GitLab:        "https://gitlab.com",
-		Buildkite:     "https://agent.buildkite.com",
-	}
-)
-
 type OIDCProviders struct {
 	providerEndpoints map[string]string // readonly and set at creation time
 	requestGroup      singleflight.Group

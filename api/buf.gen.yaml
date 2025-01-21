@@ -1,14 +1,16 @@
-version: v1
+version: v2
 managed:
   enabled: true
-  go_package_prefix:
-    default: github.com/wolfeidau/zipstash/api/gen/proto/go
-    except:
-      - buf.build/googleapis/googleapis
+  disable:
+    - file_option: go_package
+      module: buf.build/googleapis/googleapis
+  override:
+    - file_option: go_package_prefix
+      value: github.com/wolfeidau/zipstash/api/gen/proto/go
 plugins:
-  - name: go
+  - local: protoc-gen-go
     out: gen/proto/go
     opt: paths=source_relative
-  - name: connect-go
+  - local: protoc-gen-connect-go
     out: gen/proto/go
     opt: paths=source_relative

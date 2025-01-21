@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package provider.v1;
+
+// Provider represents supported CI/CD providers
+enum Provider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_GITHUB_ACTIONS = 1;
+  PROVIDER_GITLAB = 2;
+  PROVIDER_BUILDKITE = 3;
+}
+
+message GitHubActions {
+  string owner = 1;
+}
+
+message GitLab {
+  string owner = 1;
+}
+
+message Buildkite {
+  string organization_slug = 1;
+}

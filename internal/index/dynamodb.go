@@ -16,27 +16,35 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound      = errors.New("not found")
+	ErrAlreadyExists = errors.New("already exists")
 )
 
+type DynamoDBClientFunc func() *dynamodb.Client
+
 type StoreConfig struct {
-	TableName string
-	Create    bool
+	CacheIndexTable   string
+	Create            bool
+	GetDynamoDBClient DynamoDBClientFunc
 }
 
 type Store struct {
 	dynamodbClient *dynamodb.Client
-	dynamodb       *dynastorev2.Store[string, string, CacheRecord]
+	cacheStore     *dynastorev2.Store[string, string, CacheRecord]
+	tenantStore    *dynastorev2.Store[string, string, TenantRecord]
 }
 
-func MustNewStore(ctx context.Context, dynamodbClient *dynamodb.Client, config StoreConfig) *Store {
+func MustNewStore(ctx context.Context, config StoreConfig) *Store {
+	ddbClient := config.GetDynamoDBClient()
+
 	s := &Store{
-		dynamodbClient: dynamodbClient,
-		dynamodb:       dynastorev2.New[string, string, CacheRecord](dynamodbClient, config.TableName),
+		dynamodbClient: ddbClient,
+		cacheStore:     dynastorev2.New[string, string, CacheRecord](ddbClient, config.CacheIndexTable),
+		tenantStore:    dynastorev2.New[string, string, TenantRecord](ddbClient, config.CacheIndexTable),
 	}
 
 	if config.Create {
-		err := s.createTable(ctx, config.TableName)
+		err := s.createTable(ctx, config.CacheIndexTable)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create table")
 		}
@@ -49,7 +57,7 @@ func (s *Store) GetCache(ctx context.Context, id string) (CacheRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.Get")
 	defer span.End()
 
-	_, cacheRec, err := s.dynamodb.Get(ctx, "cache", id)
+	_, cacheRec, err := s.cacheStore.Get(ctx, "cache", id)
 	if err != nil {
 		if errors.Is(err, dynastorev2.ErrKeyNotExists) {
 			return CacheRecord{}, ErrNotFound
@@ -65,7 +73,7 @@ func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, 
 	ctx, span := trace.Start(ctx, "Store.Get")
 	defer span.End()
 
-	_, cacheRec, err := s.dynamodb.Get(ctx, "cache", id)
+	_, cacheRec, err := s.cacheStore.Get(ctx, "cache", id)
 	if err != nil {
 		if errors.Is(err, dynastorev2.ErrKeyNotExists) {
 			return false, CacheRecord{}, nil
@@ -81,9 +89,15 @@ func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, life
 	ctx, span := trace.Start(ctx, "Store.Put")
 	defer span.End()
 
-	_, err := s.dynamodb.Create(ctx, "cache", id, value,
-		s.dynamodb.WriteWithCreateConstraintDisabled(true),
-		s.dynamodb.WriteWithTTL(lifetime),
+	_, err := s.cacheStore.Create(ctx, "cache", id, value,
+		s.cacheStore.WriteWithCreateConstraintDisabled(true),
+		s.cacheStore.WriteWithTTL(lifetime),
+		s.cacheStore.WriteWithExtraFields(map[string]any{
+			// bit of a hack as created is just updated without create constraint
+			"created": time.Now().UTC().Format(time.RFC3339),
+			"pk1":     "cache#owner",
+			"sk1":     providerKey(value.Provider, value.Owner),
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to put cache record: %w", err)
@@ -91,16 +105,61 @@ func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, life
 
 	return err
 }
+
 func (s *Store) DeleteCache(ctx context.Context, id string) error {
 	ctx, span := trace.Start(ctx, "Store.Delete")
 	defer span.End()
 
-	err := s.dynamodb.Delete(ctx, "cache", id)
+	err := s.cacheStore.Delete(ctx, "cache", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete cache record: %w", err)
 	}
 
 	return err
+}
+
+func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) error {
+	ctx, span := trace.Start(ctx, "Store.PutTenant")
+	defer span.End()
+
+	if value.Validate() != nil {
+		return fmt.Errorf("failed to validate tenant record: %w", value.Validate())
+	}
+
+	_, err := s.tenantStore.Create(ctx, "tenant", id, value,
+		s.tenantStore.WriteWithExtraFields(map[string]any{
+			"created": time.Now().UTC().Format(time.RFC3339),
+			"pk1":     "tenant#key",
+			"sk1":     value.Provider.Key(),
+		}),
+	)
+	if err != nil {
+		var oc *types.ConditionalCheckFailedException
+		if errors.As(err, &oc) {
+			return fmt.Errorf("tenant already exists: %w", ErrAlreadyExists)
+		}
+		return fmt.Errorf("failed to put cache record: %w", err)
+	}
+
+	return err
+}
+
+func (s *Store) ExistsTenant(ctx context.Context, key string) (bool, TenantRecord, error) {
+	ctx, span := trace.Start(ctx, "Store.ExistsTenant")
+	defer span.End()
+
+	_, res, err := s.tenantStore.ListBySortKeyPrefix(ctx, "tenant#key", key,
+		s.tenantStore.ReadWithLimit(1),
+		s.tenantStore.ReadWithIndex("idx_global_1", "pk1", "sk1"))
+	if err != nil {
+		return false, TenantRecord{}, fmt.Errorf("failed to list tenants: %w", err)
+	}
+
+	if len(res) == 0 {
+		return false, TenantRecord{}, nil
+	}
+
+	return true, res[0], nil
 }
 
 func (s *Store) createTable(ctx context.Context, tableName string) error {

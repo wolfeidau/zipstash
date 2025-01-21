@@ -6,10 +6,6 @@ import (
 	"strings"
 )
 
-type Config struct {
-	Providers map[string]string
-}
-
 func extractBearerToken(header http.Header) (string, error) {
 	reqToken := header.Get("Authorization")
 	splitToken := strings.Split(reqToken, "Bearer")

@@ -21,6 +21,14 @@ Parameters:
   ContainerImageUri:
     Description: The container image URI which hosts the images.
     Type: String
+  OtelExporterEndpoint:
+    Description: The otel collector endpoint
+    Type: String
+    Default: https://api.honeycomb.io
+  OtelExporterToken:
+    Description: The token to pass to the otel collector
+    Type: String
+    NoEcho: true
 
 Outputs:
   HttpAPIURL:
@@ -166,6 +174,10 @@ Resources:
         Variables:
           CACHE_BUCKET: !Ref CacheBucket
           CACHE_INDEX_TABLE: !Ref CacheIndexTable
+          TRACE_EXPORTER: grpc
+          OTEL_SERVICE_NAME: zipstash
+          OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
+          OTEL_EXPORTER_OTLP_HEADERS: !Sub x-honeycomb-team=${OtelExporterToken}
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref CacheBucket
