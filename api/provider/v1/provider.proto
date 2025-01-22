@@ -9,15 +9,3 @@ enum Provider {
   PROVIDER_GITLAB = 2;
   PROVIDER_BUILDKITE = 3;
 }
-
-message GitHubActions {
-  string owner = 1;
-}
-
-message GitLab {
-  string owner = 1;
-}
-
-message Buildkite {
-  string organization_slug = 1;
-}
