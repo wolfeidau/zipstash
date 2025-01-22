@@ -1,6 +1,7 @@
 package provider
 
 const (
+	Unspecified   = "unspecified"
 	Buildkite     = "buildkite"
 	GitHubActions = "github_actions"
 	GitLab        = "gitlab"

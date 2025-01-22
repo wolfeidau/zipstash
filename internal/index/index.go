@@ -87,6 +87,6 @@ func GitLabProviderKey(owner, project string) string {
 	return fmt.Sprintf("%s#%s", provider.GitLab, owner)
 }
 
-func providerKey(provider, owner string) string {
+func TenantKey(provider, owner string) string {
 	return fmt.Sprintf("%s#%s", provider, owner)
 }
