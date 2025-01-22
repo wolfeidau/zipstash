@@ -36,7 +36,7 @@ func (c *GitHubActions) Run(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to create tenant: %w", err)
 	}
 
-	log.Info().Msgf("created tenant: %s", res.Msg.Id)
+	log.Info().Msgf("created github tenant: %s", res.Msg.Id)
 
 	return nil
 }
@@ -65,7 +65,7 @@ func (c *GitLab) Run(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to create tenant: %w", err)
 	}
 
-	log.Info().Str("id", res.Msg.Id).Msg("created buildkite tenant")
+	log.Info().Str("id", res.Msg.Id).Msg("created gitlab tenant")
 
 	return nil
 }

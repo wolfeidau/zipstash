@@ -36,6 +36,9 @@ const (
 	// ProvisionServiceCreateTenantProcedure is the fully-qualified name of the ProvisionService's
 	// CreateTenant RPC.
 	ProvisionServiceCreateTenantProcedure = "/provision.v1.ProvisionService/CreateTenant"
+	// ProvisionServiceGetTenantProcedure is the fully-qualified name of the ProvisionService's
+	// GetTenant RPC.
+	ProvisionServiceGetTenantProcedure = "/provision.v1.ProvisionService/GetTenant"
 )
 
 // ProvisionServiceClient is a client for the provision.v1.ProvisionService service.
@@ -43,6 +46,8 @@ type ProvisionServiceClient interface {
 	// CreateTenant creates a new tenant with the specified configuration
 	// including provider settings and optional CI/CD integrations
 	CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error)
+	// GetTenant retrieves the details of a specific tenant by its ID
+	GetTenant(context.Context, *connect.Request[v1.GetTenantRequest]) (*connect.Response[v1.GetTenantResponse], error)
 }
 
 // NewProvisionServiceClient constructs a client for the provision.v1.ProvisionService service. By
@@ -62,12 +67,19 @@ func NewProvisionServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(provisionServiceMethods.ByName("CreateTenant")),
 			connect.WithClientOptions(opts...),
 		),
+		getTenant: connect.NewClient[v1.GetTenantRequest, v1.GetTenantResponse](
+			httpClient,
+			baseURL+ProvisionServiceGetTenantProcedure,
+			connect.WithSchema(provisionServiceMethods.ByName("GetTenant")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // provisionServiceClient implements ProvisionServiceClient.
 type provisionServiceClient struct {
 	createTenant *connect.Client[v1.CreateTenantRequest, v1.CreateTenantResponse]
+	getTenant    *connect.Client[v1.GetTenantRequest, v1.GetTenantResponse]
 }
 
 // CreateTenant calls provision.v1.ProvisionService.CreateTenant.
@@ -75,11 +87,18 @@ func (c *provisionServiceClient) CreateTenant(ctx context.Context, req *connect.
 	return c.createTenant.CallUnary(ctx, req)
 }
 
+// GetTenant calls provision.v1.ProvisionService.GetTenant.
+func (c *provisionServiceClient) GetTenant(ctx context.Context, req *connect.Request[v1.GetTenantRequest]) (*connect.Response[v1.GetTenantResponse], error) {
+	return c.getTenant.CallUnary(ctx, req)
+}
+
 // ProvisionServiceHandler is an implementation of the provision.v1.ProvisionService service.
 type ProvisionServiceHandler interface {
 	// CreateTenant creates a new tenant with the specified configuration
 	// including provider settings and optional CI/CD integrations
 	CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error)
+	// GetTenant retrieves the details of a specific tenant by its ID
+	GetTenant(context.Context, *connect.Request[v1.GetTenantRequest]) (*connect.Response[v1.GetTenantResponse], error)
 }
 
 // NewProvisionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -95,10 +114,18 @@ func NewProvisionServiceHandler(svc ProvisionServiceHandler, opts ...connect.Han
 		connect.WithSchema(provisionServiceMethods.ByName("CreateTenant")),
 		connect.WithHandlerOptions(opts...),
 	)
+	provisionServiceGetTenantHandler := connect.NewUnaryHandler(
+		ProvisionServiceGetTenantProcedure,
+		svc.GetTenant,
+		connect.WithSchema(provisionServiceMethods.ByName("GetTenant")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/provision.v1.ProvisionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProvisionServiceCreateTenantProcedure:
 			provisionServiceCreateTenantHandler.ServeHTTP(w, r)
+		case ProvisionServiceGetTenantProcedure:
+			provisionServiceGetTenantHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -110,4 +137,8 @@ type UnimplementedProvisionServiceHandler struct{}
 
 func (UnimplementedProvisionServiceHandler) CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("provision.v1.ProvisionService.CreateTenant is not implemented"))
+}
+
+func (UnimplementedProvisionServiceHandler) GetTenant(context.Context, *connect.Request[v1.GetTenantRequest]) (*connect.Response[v1.GetTenantResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("provision.v1.ProvisionService.GetTenant is not implemented"))
 }
