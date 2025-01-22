@@ -25,18 +25,24 @@ Parameters:
     Description: The otel collector endpoint
     Type: String
     Default: https://api.honeycomb.io
-  OtelExporterToken:
-    Description: The token to pass to the otel collector
+  OtelExporterHeaders:
+    Description: The headers to pass to the otel collector
     Type: String
     NoEcho: true
 
 Outputs:
+  AdminHttpAPIURL:
+    Description: "API Gateway endpoint URL for admin web api"
+    Value: !Sub "https://${AdminHttpAPI}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
   HttpAPIURL:
-    Description: "API Gateway endpoint URL for Prod stage for web api"
+    Description: "API Gateway endpoint URL for web api"
     Value: !Sub "https://${HttpAPI}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
   CacheBucket:
     Description: "The name of the bucket where the cache is stored"
     Value: !Ref CacheBucket
+  CacheIndexTable:
+    Description: "The name of the dynamodb table where the cache index is stored"
+    Value: !Ref CacheIndexTable
 
 Globals:
   Function:
@@ -152,13 +158,13 @@ Resources:
         DestinationArn: !GetAtt HTTPAPIAccessLogGroup.Arn
         Format: '{"requestId":"$context.requestId","domainName":"$context.domainName","httpMethod":"$context.httpMethod","identitySourceIp":"$context.identity.sourceIp","path":"$context.path","protocol":"$context.protocol","requestTime":"$context.requestTime","status":"$context.status","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","integrationLatency":"$context.integrationLatency","authorizerError":"$context.authorizer.error","integrationErrorMessage":"$context.integrationErrorMessage","errorMessage":"$context.error.message","errorResponseType":"$context.error.responseType"}'
 
-  ObjectCacheAPILambdaLogGroup:
+  CacheAPILambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ObjectCacheAPILambda}"
+      LogGroupName: !Sub "/aws/lambda/${CacheAPILambda}"
       RetentionInDays: !Ref RetentionInDays
 
-  ObjectCacheAPILambda:
+  CacheAPILambda:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Image
@@ -177,7 +183,64 @@ Resources:
           TRACE_EXPORTER: grpc
           OTEL_SERVICE_NAME: zipstash
           OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
-          OTEL_EXPORTER_OTLP_HEADERS: !Sub x-honeycomb-team=${OtelExporterToken}
+          OTEL_EXPORTER_OTLP_HEADERS: !Ref OtelExporterHeaders
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref CacheBucket
+        - S3WritePolicy:
+            BucketName: !Ref CacheBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheIndexTable
+      Architectures:
+        - arm64
+
+  AdminHTTPAPIAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway-v2/AccessLog-${AppName}-${Stage}-${Branch}-admin"
+      RetentionInDays: !Ref RetentionInDays
+
+  AdminHttpAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      FailOnWarnings: True
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+        DetailedMetricsEnabled: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt AdminHTTPAPIAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","domainName":"$context.domainName","httpMethod":"$context.httpMethod","identitySourceIp":"$context.identity.sourceIp","path":"$context.path","protocol":"$context.protocol","requestTime":"$context.requestTime","status":"$context.status","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","integrationLatency":"$context.integrationLatency","authorizerError":"$context.authorizer.error","integrationErrorMessage":"$context.integrationErrorMessage","errorMessage":"$context.error.message","errorResponseType":"$context.error.responseType"}'
+
+  ProvisioningAPILambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProvisioningAPILambda}"
+      RetentionInDays: !Ref RetentionInDays
+
+  ProvisioningAPILambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Events:
+        ApiCall:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AdminHttpAPI
+      ImageUri: !Ref ContainerImageUri
+      ImageConfig:
+        Command: ['admin-lambda']
+      Environment:
+        Variables:
+          CACHE_BUCKET: !Ref CacheBucket
+          CACHE_INDEX_TABLE: !Ref CacheIndexTable
+          TRACE_EXPORTER: grpc
+          OTEL_SERVICE_NAME: zipstash
+          OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
+          OTEL_EXPORTER_OTLP_HEADERS: !Ref OtelExporterHeaders
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref CacheBucket

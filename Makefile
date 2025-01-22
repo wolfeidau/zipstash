@@ -44,7 +44,7 @@ deploy-repository:
 
 .PHONY: deploy-api
 deploy-api:
-	@echo "--- deploy stack $(APPNAME)-$(STAGE)-$(BRANCH)-website"
+	@echo "--- deploy stack $(APPNAME)-$(STAGE)-$(BRANCH)-api"
 	$(eval DOCKER_REPO := $(shell aws ssm get-parameter --name '/config/$(STAGE)/$(BRANCH)/$(APPNAME)/repository_uri' --query 'Parameter.Value' --output text))
 	@sam deploy \
 		--image-repository=$(DOCKER_REPO) \
@@ -56,7 +56,7 @@ deploy-api:
 		--parameter-overrides AppName=$(APPNAME) Stage=$(STAGE) Branch=$(BRANCH) \
 			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH} \
 			OtelExporterEndpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT) \
-			OtelExporterToken=$(OTEL_EXPORTER_TOKEN)
+			OtelExporterHeaders="$(OTEL_EXPORTER_HEADERS)"
 
 .PHONY: logs
 logs:
