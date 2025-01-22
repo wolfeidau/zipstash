@@ -66,12 +66,18 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	name := createReq.Msg.CacheEntry.Name
 	branch := createReq.Msg.CacheEntry.Branch
 
+	log.Info().
+		Str("Owner", createReq.Msg.CacheEntry.Owner).
+		Str("ProviderType", fromProviderV1(createReq.Msg.ProviderType)).
+		Msg("check the tenant exists")
+
 	// validate the owner
 	_, err := zs.validateOwner(ctx, createReq.Msg.CacheEntry.Owner, fromProviderV1(createReq.Msg.ProviderType))
 	if err != nil {
 		if errors.Is(err, errTenantNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.CreateEntry tenant not found"))
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cache.v1.CacheService.CreateEntry permission denied"))
 		}
+
 		log.Error().Err(err).Msg("failed to validate owner")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
 	}
@@ -221,6 +227,22 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	s3key := path.Join(prefix, getReq.Msg.Key)
 
 	log.Info().
+		Str("Owner", getReq.Msg.Owner).
+		Str("ProviderType", fromProviderV1(getReq.Msg.ProviderType)).
+		Msg("check the tenant exists")
+
+	// validate the owner
+	_, err := zs.validateOwner(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType))
+	if err != nil {
+		if errors.Is(err, errTenantNotFound) {
+			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cache.v1.CacheService.CreateEntry permission denied"))
+		}
+
+		log.Error().Err(err).Msg("failed to validate owner")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
+	}
+
+	log.Info().
 		Str("Prefix", prefix).
 		Str("Key", getReq.Msg.Key).
 		Msg("cache entry get request")
@@ -281,7 +303,7 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	span.SetName("ZipStash.validateOwner")
 	defer span.End()
 
-	exists, rec, err := zs.store.ExistsTenantByKey(ctx, index.TenantKey(owner, provider))
+	exists, rec, err := zs.store.ExistsTenantByKey(ctx, index.TenantKey(provider, owner))
 	if err != nil {
 		return index.TenantRecord{}, fmt.Errorf("failed to check if tenant exists: %w", err)
 	}

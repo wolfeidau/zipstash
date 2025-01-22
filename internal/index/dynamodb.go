@@ -118,6 +118,21 @@ func (s *Store) DeleteCache(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *Store) GetTenant(ctx context.Context, id string) (TenantRecord, error) {
+	ctx, span := trace.Start(ctx, "Store.GetTenant")
+	defer span.End()
+
+	_, tenantRec, err := s.tenantStore.Get(ctx, "tenant", id)
+	if err != nil {
+		if errors.Is(err, dynastorev2.ErrKeyNotExists) {
+			return TenantRecord{}, ErrNotFound
+		}
+		return TenantRecord{}, fmt.Errorf("failed to get tenant record: %w", err)
+	}
+
+	return tenantRec, nil
+}
+
 func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) error {
 	ctx, span := trace.Start(ctx, "Store.PutTenant")
 	defer span.End()
@@ -130,7 +145,7 @@ func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) er
 		s.tenantStore.WriteWithExtraFields(map[string]any{
 			"created": time.Now().UTC().Format(time.RFC3339),
 			"pk1":     "tenant#key",
-			"sk1":     value.Provider.Key(),
+			"sk1":     TenantKey(value.ProviderType, value.Owner),
 		}),
 	)
 	if err != nil {

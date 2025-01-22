@@ -128,8 +128,6 @@ github.com/saracen/zipextra v0.0.0-20220303013732-0187cb0159ea/go.mod h1:hnzuad9
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/wolfeidau/dynastorev2 v0.4.0 h1:fN4/3TB27e1+snzPZKX/HjoE/0ZkjgMj79EWMWl9FI4=
-github.com/wolfeidau/dynastorev2 v0.4.0/go.mod h1:DqgEb8PHuIgoTjIus/wcz4StvWMrzHDvoWXR51EQwM8=
 github.com/wolfeidau/dynastorev2 v0.5.0 h1:pObGHeWgkIx/OMDEfF+G4BcJyfwm7+2jARBLehGVQ6A=
 github.com/wolfeidau/dynastorev2 v0.5.0/go.mod h1:DqgEb8PHuIgoTjIus/wcz4StvWMrzHDvoWXR51EQwM8=
 github.com/wolfeidau/lambda-go-extras v1.5.1 h1:y3TCwHZiLeCmL+kq8cLgjCw0CXNzFhzp0Phfz3N2OfY=

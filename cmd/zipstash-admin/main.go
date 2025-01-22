@@ -8,6 +8,8 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
 	"github.com/alecthomas/kong"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/provision/v1/provisionv1connect"
 	"github.com/wolfeidau/zipstash/internal/commands/admin"
+	"github.com/wolfeidau/zipstash/pkg/sigv4"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
@@ -25,6 +28,7 @@ var (
 		Debug        bool `help:"Enable debug mode."`
 		Version      kong.VersionFlag
 		Endpoint     string                `help:"admin endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
+		Service      string                `default:"execute-api"`
 		CreateTenant admin.CreateTenantCmd `cmd:"" help:"create a tenant."`
 	}
 )
@@ -42,6 +46,11 @@ func main() {
 	defer func() {
 		_ = tp.Shutdown(ctx)
 	}()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load config")
+	}
 
 	otelInterceptor, err := otelconnect.NewInterceptor(
 		otelconnect.WithTracerProvider(tp),
@@ -61,7 +70,7 @@ func main() {
 		},
 		kong.BindTo(ctx, (*context.Context)(nil)))
 	enableDebug(cli.Debug) // enable debug logging
-	err = cmd.Run(&admin.Globals{Debug: cli.Debug, Version: version, Client: buildClient(cli.Endpoint, otelInterceptor)})
+	err = cmd.Run(&admin.Globals{Debug: cli.Debug, Version: version, Client: buildClient(cli.Endpoint, cli.Service, cfg, otelInterceptor)})
 	span.RecordError(err)
 	cmd.FatalIfErrorf(err)
 }
@@ -74,6 +83,10 @@ func enableDebug(debug bool) {
 	}
 }
 
-func buildClient(endpoint string, otelInterceptor *otelconnect.Interceptor) provisionv1connect.ProvisionServiceClient {
-	return provisionv1connect.NewProvisionServiceClient(http.DefaultClient, endpoint, connect.WithInterceptors(otelInterceptor))
+func buildClient(endpoint, service string, cfg aws.Config, otelInterceptor *otelconnect.Interceptor) provisionv1connect.ProvisionServiceClient {
+	httpClient := &http.Client{
+		Transport: sigv4.NewTransport(cfg, service, cfg.Region, http.DefaultTransport),
+	}
+
+	return provisionv1connect.NewProvisionServiceClient(httpClient, endpoint, connect.WithInterceptors(otelInterceptor))
 }
