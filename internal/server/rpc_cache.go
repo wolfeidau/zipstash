@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -17,13 +18,19 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
+	providerv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provider/v1"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
+	"github.com/wolfeidau/zipstash/internal/provider"
 )
 
 const (
 	cacheRecordInflightTTL = 30 * time.Minute
 	cacheRecordTTL         = 24 * time.Hour
+)
+
+var (
+	errTenantNotFound = errors.New("tenant not found")
 )
 
 type CacheConfig struct {
@@ -58,18 +65,19 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	// TODO: validate the name and branch
 	name := createReq.Msg.CacheEntry.Name
 	branch := createReq.Msg.CacheEntry.Branch
-	owner := createReq.Msg.CacheEntry.Owner
+
+	// validate the owner
+	_, err := zs.validateOwner(ctx, createReq.Msg.CacheEntry.Owner, fromProviderV1(createReq.Msg.ProviderType))
+	if err != nil {
+		if errors.Is(err, errTenantNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.CreateEntry tenant not found"))
+		}
+		log.Error().Err(err).Msg("failed to validate owner")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
+	}
 
 	prefix := path.Join(name, branch)
 	s3key := path.Join(prefix, createReq.Msg.CacheEntry.Key)
-
-	log.Info().
-		Str("Key", createReq.Msg.CacheEntry.Key).
-		Str("Prefix", prefix).
-		Str("Bucket", zs.cfg.CacheBucket).
-		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
-		Int64("FileSize", createReq.Msg.CacheEntry.FileSize).
-		Msg("presign upload request")
 
 	// does the cache entry already exist?
 	exists, cacheRec, err := zs.store.ExistsCache(ctx, s3key)
@@ -89,6 +97,13 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	// generate an identifier to track the upload
 	uploadID := uuid.New().String()
 
+	log.Info().
+		Str("Key", createReq.Msg.CacheEntry.Key).
+		Str("uploadID", uploadID).
+		Str("Prefix", prefix).
+		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
+		Msg("presign upload request")
+
 	uploadInstructs, err := zs.presigner.GenerateFileUploadInstructions(
 		ctx,
 		s3key,
@@ -106,8 +121,8 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
 		Name:              name,
 		Branch:            branch,
-		Owner:             owner,
-		Provider:          createReq.Msg.ProviderType.String(),
+		Owner:             createReq.Msg.CacheEntry.Owner,
+		Provider:          fromProviderV1(createReq.Msg.ProviderType),
 		Sha256:            createReq.Msg.CacheEntry.Sha256Sum,
 		Compression:       createReq.Msg.CacheEntry.Compression,
 		MultipartUploadId: uploadInstructs.MultipartUploadId,
@@ -261,6 +276,23 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	}), nil
 }
 
+func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provider string) (index.TenantRecord, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetName("ZipStash.validateOwner")
+	defer span.End()
+
+	exists, rec, err := zs.store.ExistsTenantByKey(ctx, index.TenantKey(owner, provider))
+	if err != nil {
+		return index.TenantRecord{}, fmt.Errorf("failed to check if tenant exists: %w", err)
+	}
+
+	if !exists {
+		return index.TenantRecord{}, errTenantNotFound
+	}
+
+	return rec, nil
+}
+
 func (zs *CacheServiceHandler) exists(ctx context.Context, name, branch, key string) (bool, *s3.HeadObjectOutput, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetName("ZipStash.exists")
@@ -345,4 +377,18 @@ func fromCachePartETagV1(multipartEtags []*v1.CachePartETag) []types.CompletedPa
 	}
 
 	return parts
+}
+
+func fromProviderV1(prov providerv1.Provider) string {
+	switch prov {
+	case providerv1.Provider_PROVIDER_GITHUB_ACTIONS:
+		return provider.GitHubActions
+	case providerv1.Provider_PROVIDER_GITLAB:
+		return provider.GitLab
+	case providerv1.Provider_PROVIDER_BUILDKITE:
+		return provider.Buildkite
+	default:
+		return provider.Unspecified
+	}
+
 }

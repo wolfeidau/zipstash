@@ -96,7 +96,7 @@ func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, life
 			// bit of a hack as created is just updated without create constraint
 			"created": time.Now().UTC().Format(time.RFC3339),
 			"pk1":     "cache#owner",
-			"sk1":     providerKey(value.Provider, value.Owner),
+			"sk1":     TenantKey(value.Provider, value.Owner),
 		}),
 	)
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) er
 	return err
 }
 
-func (s *Store) ExistsTenant(ctx context.Context, key string) (bool, TenantRecord, error) {
+func (s *Store) ExistsTenantByKey(ctx context.Context, key string) (bool, TenantRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.ExistsTenant")
 	defer span.End()
 
