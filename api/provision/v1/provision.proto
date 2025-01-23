@@ -20,12 +20,7 @@ service ProvisionService {
 message CreateTenantRequest {
   string id = 1;
   provider.v1.Provider provider_type = 2;
-
-  oneof provider {
-    provider.v1.GitHubActions github_actions = 3;
-    provider.v1.GitLab gitlab = 4;
-    provider.v1.Buildkite buildkite = 5;
-  }
+  string slug = 3;
 }
 
 message CreateTenantResponse {
@@ -39,10 +34,6 @@ message GetTenantRequest {
 message GetTenantResponse {
   string id = 1;
   provider.v1.Provider provider_type = 2;
-  oneof provider {
-    provider.v1.GitHubActions github_actions = 3;
-    provider.v1.GitLab gitlab = 4;
-    provider.v1.Buildkite buildkite = 5;
-  }
+  string slug = 3;
   string created_at = 6;
 }

@@ -18,10 +18,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
-	providerv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provider/v1"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"github.com/wolfeidau/zipstash/internal/provider"
 )
 
 const (
@@ -399,18 +397,4 @@ func fromCachePartETagV1(multipartEtags []*v1.CachePartETag) []types.CompletedPa
 	}
 
 	return parts
-}
-
-func fromProviderV1(prov providerv1.Provider) string {
-	switch prov {
-	case providerv1.Provider_PROVIDER_GITHUB_ACTIONS:
-		return provider.GitHubActions
-	case providerv1.Provider_PROVIDER_GITLAB:
-		return provider.GitLab
-	case providerv1.Provider_PROVIDER_BUILDKITE:
-		return provider.Buildkite
-	default:
-		return provider.Unspecified
-	}
-
 }
