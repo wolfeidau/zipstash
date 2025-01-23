@@ -11,9 +11,9 @@ import (
 const audience = "zipstash.wolfe.id.au"
 
 type Globals struct {
-	Debug   bool
-	Version string
 	Client  cachev1connect.CacheServiceClient
+	Version string
+	Debug   bool
 }
 
 func SplitLines(s string) []string {

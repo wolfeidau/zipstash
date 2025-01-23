@@ -15,6 +15,16 @@ lint:
 	$(shell go env GOPATH)/bin/gosec ./...
 	$(shell go env GOPATH)/bin/staticcheck ./...
 
+.PHONY: test
+test:
+	@echo "--- test"
+	go test -v -cover ./...
+
+.PHONY: fieldalignment
+fieldalignment:
+	@echo "--- field alignment"
+	fieldalignment -fix .
+
 .PHONY: docker-login
 docker-login:
 	$(eval DOCKER_HOSTNAME := $(shell aws ssm get-parameter --name '/config/$(STAGE)/$(BRANCH)/$(APPNAME)/repository_hostname' --query 'Parameter.Value' --output text))

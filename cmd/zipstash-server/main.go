@@ -12,11 +12,11 @@ var (
 	version = "dev"
 
 	cli struct {
-		Debug       bool `help:"Enable debug mode."`
-		Version     kong.VersionFlag
 		RPC         commands.RPCServerCmd         `cmd:"" help:"start a rpc server."`
 		Lambda      commands.LambdaServerCmd      `cmd:"" help:"start a server in aws lambda."`
 		AdminLambda commands.AdminLambdaServerCmd `cmd:"" help:"start an admin server in aws lambda."`
+		Debug       bool                          `help:"Enable debug mode."`
+		Version     kong.VersionFlag
 	}
 )
 

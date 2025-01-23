@@ -23,9 +23,9 @@ var (
 type DynamoDBClientFunc func() *dynamodb.Client
 
 type StoreConfig struct {
+	GetDynamoDBClient DynamoDBClientFunc
 	CacheIndexTable   string
 	Create            bool
-	GetDynamoDBClient DynamoDBClientFunc
 }
 
 type Store struct {

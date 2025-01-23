@@ -9,9 +9,9 @@ import (
 func TestOffsetsForDownload(t *testing.T) {
 	tests := []struct {
 		name     string
+		expected []Offset
 		total    int64
 		partSize int64
-		expected []Offset
 	}{
 		{
 			name:     "10MB",

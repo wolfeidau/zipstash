@@ -25,10 +25,10 @@ type RestoreCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
-	Clean       bool   `help:"clean the path before restore" env:"INPUT_CLEAN"`
 	Branch      string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" required:""`
 	Name        string `help:"repository, project or pipeline name to use for the cache entry" env:"INPUT_REPOSITORY" required:""`
 	Owner       string `help:"owner of the cache entry" env:"INPUT_OWNER"`
+	Clean       bool   `help:"clean the path before restore" env:"INPUT_CLEAN"`
 }
 
 func (c *RestoreCmd) Run(ctx context.Context, globals *Globals) error {

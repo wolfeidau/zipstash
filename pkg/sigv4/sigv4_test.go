@@ -20,11 +20,11 @@ func TestTransport_RoundTrip(t *testing.T) {
 	assert := require.New(t)
 
 	type fields struct {
-		awscfg      aws.Config
-		region      string
-		serviceName string
 		body        io.Reader
 		transport   http.RoundTripper
+		region      string
+		serviceName string
+		awscfg      aws.Config
 	}
 	type args struct {
 		req func(method, url string, body io.Reader) *http.Request

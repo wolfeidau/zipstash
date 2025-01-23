@@ -9,6 +9,9 @@ import (
 )
 
 type CacheRecord struct {
+	UpdatedAt         time.Time `json:"updated_at"`
+	MultipartUploadId *string   `json:"multipart_upload_id"`
+	Identity          *Identity `json:"identity"`
 	ID                string    `json:"id"`
 	Paths             string    `json:"path"`
 	Provider          string    `json:"provider"`
@@ -18,9 +21,6 @@ type CacheRecord struct {
 	Sha256            string    `json:"sha256"`
 	Compression       string    `json:"compression"`
 	FileSize          int64     `json:"file_size"`
-	MultipartUploadId *string   `json:"multipart_upload_id"`
-	Identity          *Identity `json:"identity"`
-	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type TenantRecord struct {

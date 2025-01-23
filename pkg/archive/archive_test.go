@@ -70,8 +70,8 @@ func TestIsUnderHome(t *testing.T) {
 func TestChecksumSHA256_Sum(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []byte
 		expected string
+		input    []byte
 	}{
 		{
 			name:     "empty input",

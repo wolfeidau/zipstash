@@ -29,11 +29,11 @@ type RPCServerCmd struct {
 	Listen                string `help:"listen address" default:"localhost:8080"`
 	CacheBucket           string `help:"bucket to store cache" env:"CACHE_BUCKET"`
 	CacheIndexTable       string `help:"table to store cache index" env:"CACHE_INDEX_TABLE"`
+	S3Endpoint            string `help:"s3 endpoint, used in local mode" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
+	DynamoEndpoint        string `help:"s3 endpoint, used in local mode" env:"DYNAMO_ENDPOINT" default:"http://dynamodb-local.zipstash.orb.local:8000"`
 	CreateCacheIndexTable bool   `help:"create cache index table if it does not exist" env:"CREATE_CACHE_INDEX_TABLE" default:"false"`
 	Local                 bool   `help:"run in local mode"`
 	TrustRemote           bool   `help:"trust remote spans"`
-	S3Endpoint            string `help:"s3 endpoint, used in local mode" env:"S3_ENDPOINT" default:"http://minio.zipstash.orb.local:9000"`
-	DynamoEndpoint        string `help:"s3 endpoint, used in local mode" env:"DYNAMO_ENDPOINT" default:"http://dynamodb-local.zipstash.orb.local:8000"`
 }
 
 func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {

@@ -64,7 +64,7 @@ func verifyWithProvider(ctx context.Context, token string, prov *oidc.Provider) 
 }
 
 type CIAuthIdentity struct {
+	IDToken  *oidc.IDToken
 	Provider string
 	Subject  string
-	IDToken  *oidc.IDToken
 }

@@ -22,11 +22,11 @@ var (
 	version = "dev"
 
 	cli struct {
-		Debug    bool `help:"Enable debug mode."`
-		Version  kong.VersionFlag
-		Endpoint string            `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
 		Save     client.SaveCmd    `cmd:"" help:"save a cache entry."`
 		Restore  client.RestoreCmd `cmd:"" help:"restore a cache entry."`
+		Endpoint string            `help:"endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
+		Debug    bool              `help:"Enable debug mode."`
+		Version  kong.VersionFlag
 	}
 )
 

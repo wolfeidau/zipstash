@@ -14,8 +14,8 @@ func TestGetToken(t *testing.T) {
 		name      string
 		source    string
 		audience  string
-		wantErr   bool
 		errString string
+		wantErr   bool
 	}{
 		{
 			name:      "unknown source",

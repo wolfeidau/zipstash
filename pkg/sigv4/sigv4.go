@@ -18,11 +18,11 @@ const (
 )
 
 type Transport struct {
+	transport   http.RoundTripper
 	signer      *v4.Signer
-	awscfg      aws.Config
 	region      string
 	serviceName string
-	transport   http.RoundTripper
+	awscfg      aws.Config
 }
 
 func NewTransport(awscfg aws.Config, serviceName, region string, transport http.RoundTripper) *Transport {
