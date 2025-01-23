@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package provision.v1;
 
+import "buf/validate/validate.proto";
 import "provider/v1/provider.proto";
 
 // ProvisionService provides APIs for provisioning and managing tenants
@@ -18,9 +19,9 @@ service ProvisionService {
 /// It contains the configuration details for provisioning a new tenant,
 /// including the provider settings and optional CI/CD integrations.
 message CreateTenantRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string = {min_len: 1}];
   provider.v1.Provider provider_type = 2;
-  string slug = 3;
+  string slug = 3 [(buf.validate.field).string = {min_len: 1}];
 }
 
 message CreateTenantResponse {
@@ -28,7 +29,7 @@ message CreateTenantResponse {
 }
 
 message GetTenantRequest {
-  string id = 1;
+  string id = 1 [(buf.validate.field).string = {min_len: 1}];
 }
 
 message GetTenantResponse {

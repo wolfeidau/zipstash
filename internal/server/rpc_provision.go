@@ -32,11 +32,12 @@ func (ps *ProvisionServiceHandler) CreateTenant(ctx context.Context, req *connec
 		Owner:        req.Msg.Slug,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create tenant")
 		span.RecordError(err)
 		if errors.Is(err, index.ErrAlreadyExists) {
 			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("cache.v1.ProvisionService.CreateTenant already exists"))
 		}
+
+		log.Error().Err(err).Msg("failed to create tenant")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.ProvisionService.CreateTenant internal error"))
 	}
 
@@ -52,11 +53,12 @@ func (ps *ProvisionServiceHandler) GetTenant(ctx context.Context, getTenantReq *
 
 	tenant, err := ps.store.GetTenant(ctx, getTenantReq.Msg.Id)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get tenant")
 		span.RecordError(err)
 		if errors.Is(err, index.ErrNotFound) {
 			return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.ProvisionService.GetTenant tenant not found"))
 		}
+
+		log.Error().Err(err).Msg("failed to get tenant")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.ProvisionService.GetTenant internal error"))
 	}
 

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package cache.v1;
 
+import "buf/validate/validate.proto";
 // import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
@@ -26,13 +27,15 @@ message Error {
 
 // Entry represents a cache entry in the system
 message CacheEntry {
-  string key = 1;
+  string key = 1 [(buf.validate.field).string = {min_len: 1}];
   int64 file_size = 2;
-  string owner = 3;
-  string name = 4;
-  string branch = 5;
-  string compression = 6;
-  string sha256sum = 7;
+  string owner = 3 [(buf.validate.field).string = {min_len: 1}];
+  string name = 4 [(buf.validate.field).string = {min_len: 1}];
+  string branch = 5 [(buf.validate.field).string = {min_len: 1}];
+  string compression = 6 [(buf.validate.field).string = {
+    in: ["zip"]
+  }];
+  string sha256sum = 7 [(buf.validate.field).string = {min_len: 64}];
   repeated string paths = 8;
   google.protobuf.Timestamp entry_created = 9;
 }
@@ -61,7 +64,7 @@ message CacheDownloadInstruction {
 // CachePartETag represents a part's ETag in multipart operations
 message CachePartETag {
   int32 part = 1;
-  string etag = 2;
+  string etag = 2 [(buf.validate.field).string = {min_len: 1}];
   int64 part_size = 3;
 }
 
@@ -93,10 +96,10 @@ message UpdateEntryResponse {
 // GetEntryRequest is the request for retrieving a cache entry
 message GetEntryRequest {
   provider.v1.Provider provider_type = 1;
-  string key = 2;
-  string name = 3;
-  string branch = 4;
-  string owner = 5;
+  string key = 2 [(buf.validate.field).string = {min_len: 1}];
+  string name = 3 [(buf.validate.field).string = {min_len: 1}];
+  string branch = 4 [(buf.validate.field).string = {min_len: 1}];
+  string owner = 5 [(buf.validate.field).string = {min_len: 1}];
 }
 
 // GetEntryResponse is the response for retrieving a cache entry

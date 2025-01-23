@@ -2,6 +2,7 @@ version: v2
 name: buf.build/wolfeidau/zipstash
 deps:
   - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
 lint:
   use:
     - STANDARD
