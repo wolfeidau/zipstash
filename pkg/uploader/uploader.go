@@ -55,12 +55,12 @@ type Offset struct {
 // The uploader will continue to upload files until the channel is closed.
 // The uploader will return when all uploads are complete or when an error occurs.
 type Uploader struct {
-	filePath        string
 	client          *http.Client
-	uploadInstructs []CacheUploadInstruction
-	limit           int
 	errors          chan error
 	done            chan struct{}
+	filePath        string
+	uploadInstructs []CacheUploadInstruction
+	limit           int
 }
 
 func NewUploader(ctx context.Context, filePath string, uploadInstructs []CacheUploadInstruction, limit int) *Uploader {

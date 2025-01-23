@@ -16,10 +16,10 @@ import (
 )
 
 type ArchiveInfo struct {
-	ArchivePath string
-	Size        int64
-	Sha256sum   string
 	Stats       map[string]int64
+	ArchivePath string
+	Sha256sum   string
+	Size        int64
 }
 
 func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo, error) {

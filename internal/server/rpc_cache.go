@@ -27,8 +27,8 @@ const (
 )
 
 type CacheConfig struct {
-	CacheBucket string
 	GetS3Client S3ClientFunc
+	CacheBucket string
 }
 
 type S3ClientFunc func() *s3.Client
@@ -55,9 +55,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	span.SetName("Cache.CreateEntry")
 	defer span.End()
 
-	// TODO: validate the name and branch
-	name := createReq.Msg.CacheEntry.Name
-	branch := createReq.Msg.CacheEntry.Branch
+	owner := createReq.Msg.CacheEntry.Owner
 
 	log.Info().
 		Str("Owner", createReq.Msg.CacheEntry.Owner).
@@ -65,10 +63,14 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		Msg("check the tenant exists")
 
 	// validate the owner
-	_, err := zs.validateOwner(ctx, createReq.Msg.CacheEntry.Owner, fromProviderV1(createReq.Msg.ProviderType))
+	_, err := zs.validateOwner(ctx, owner, fromProviderV1(createReq.Msg.ProviderType))
 	if err != nil {
 		return nil, err // already a connect error
 	}
+
+	// TODO: validate the name and branch
+	name := createReq.Msg.CacheEntry.Name
+	branch := createReq.Msg.CacheEntry.Branch
 
 	prefix := path.Join(name, branch)
 	s3key := path.Join(prefix, createReq.Msg.CacheEntry.Key)

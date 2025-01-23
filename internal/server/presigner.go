@@ -179,15 +179,15 @@ type Offset struct {
 }
 
 type CacheURLInstruction struct {
+	Offset *Offset
 	Url    string
 	Method string
-	Offset *Offset
 }
 
 type UploadInstructionsResp struct {
+	MultipartUploadId  *string
 	UploadInstructions []CacheURLInstruction
 	Multipart          bool
-	MultipartUploadId  *string
 }
 
 type DownloadInstructionsResp struct {

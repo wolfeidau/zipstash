@@ -13,8 +13,8 @@ import (
 )
 
 type Globals struct {
-	Debug   bool
 	Version string
+	Debug   bool
 }
 
 type Resolver struct {

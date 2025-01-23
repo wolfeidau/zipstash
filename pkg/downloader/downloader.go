@@ -48,10 +48,10 @@ type Offset struct {
 // It is provided a list of URLs to upload and a channel to receive the results.
 type Downloader struct {
 	client            *http.Client
-	downloadInstructs []CacheDownloadInstruction
-	limit             int
 	errors            chan error
 	done              chan struct{}
+	downloadInstructs []CacheDownloadInstruction
+	limit             int
 }
 
 func NewDownloader(downloadInstructs []CacheDownloadInstruction, limit int) *Downloader {

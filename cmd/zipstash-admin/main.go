@@ -25,11 +25,11 @@ var (
 	version = "dev"
 
 	cli struct {
-		Debug        bool `help:"Enable debug mode."`
-		Version      kong.VersionFlag
+		CreateTenant admin.CreateTenantCmd `cmd:"" help:"create a tenant."`
 		Endpoint     string                `help:"admin endpoint to call" default:"http://localhost:8080" env:"INPUT_ENDPOINT"`
 		Service      string                `default:"execute-api"`
-		CreateTenant admin.CreateTenantCmd `cmd:"" help:"create a tenant."`
+		Debug        bool                  `help:"Enable debug mode."`
+		Version      kong.VersionFlag
 	}
 )
 

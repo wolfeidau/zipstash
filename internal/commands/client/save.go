@@ -20,11 +20,11 @@ import (
 type SaveCmd struct {
 	Key         string `help:"key to use for the cache entry" required:"" env:"INPUT_KEY"`
 	Path        string `help:"Path list for a cache entry." env:"INPUT_PATH"`
-	Skip        bool   `help:"Skip saving the cache entry." env:"INPUT_SKIP"`
 	TokenSource string `help:"token source" default:"github_actions" env:"INPUT_TOKEN_SOURCE"`
 	Branch      string `help:"branch to use for the cache entry" env:"INPUT_BRANCH" required:""`
 	Name        string `help:"repository, project or pipeline name to use for the cache entry" env:"INPUT_REPOSITORY" required:""`
 	Owner       string `help:"owner of the cache entry" env:"INPUT_OWNER"`
+	Skip        bool   `help:"Skip saving the cache entry." env:"INPUT_SKIP"`
 }
 
 func (c *SaveCmd) Run(ctx context.Context, globals *Globals) error {

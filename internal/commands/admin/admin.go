@@ -5,7 +5,7 @@ import (
 )
 
 type Globals struct {
-	Debug   bool
-	Version string
 	Client  provisionv1connect.ProvisionServiceClient
+	Version string
+	Debug   bool
 }
