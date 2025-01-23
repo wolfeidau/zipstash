@@ -13,9 +13,9 @@ import (
 )
 
 type CreateTenantCmd struct {
-	ProviderType string `help:"provider type" default:"github" enum:"github,gitlab,buildkite"`
-	TenantID     string `help:"tenant id to create" required:""`
-	Slug         string `help:"slug of the tenant" required:""`
+	Provider string `help:"provider type" default:"github" enum:"github,gitlab,buildkite"`
+	TenantID string `help:"tenant id to create" required:""`
+	Slug     string `help:"slug of the tenant" required:""`
 }
 
 func (c *CreateTenantCmd) Run(ctx context.Context, globals *Globals) error {
@@ -23,7 +23,7 @@ func (c *CreateTenantCmd) Run(ctx context.Context, globals *Globals) error {
 	defer span.End()
 
 	var prov providerv1.Provider
-	switch c.ProviderType {
+	switch c.Provider {
 	case "github":
 		prov = providerv1.Provider_PROVIDER_GITHUB_ACTIONS
 	case "gitlab":
@@ -31,7 +31,7 @@ func (c *CreateTenantCmd) Run(ctx context.Context, globals *Globals) error {
 	case "buildkite":
 		prov = providerv1.Provider_PROVIDER_BUILDKITE
 	default:
-		return fmt.Errorf("invalid provider type: %s", c.ProviderType)
+		return fmt.Errorf("invalid provider type: %s", c.Provider)
 	}
 
 	res, err := globals.Client.CreateTenant(ctx, &connect.Request[provisionv1.CreateTenantRequest]{
@@ -45,7 +45,7 @@ func (c *CreateTenantCmd) Run(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to create tenant: %w", err)
 	}
 
-	log.Info().Str("id", res.Msg.Id).Msg("created buildkite tenant")
+	log.Info().Str("id", res.Msg.Id).Str("provider", c.Provider).Msg("created tenant")
 
 	return nil
 }

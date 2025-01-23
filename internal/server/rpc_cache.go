@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -25,10 +24,6 @@ import (
 const (
 	cacheRecordInflightTTL = 30 * time.Minute
 	cacheRecordTTL         = 24 * time.Hour
-)
-
-var (
-	errTenantNotFound = errors.New("tenant not found")
 )
 
 type CacheConfig struct {
@@ -72,12 +67,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	// validate the owner
 	_, err := zs.validateOwner(ctx, createReq.Msg.CacheEntry.Owner, fromProviderV1(createReq.Msg.ProviderType))
 	if err != nil {
-		if errors.Is(err, errTenantNotFound) {
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cache.v1.CacheService.CreateEntry permission denied"))
-		}
-
-		log.Error().Err(err).Msg("failed to validate owner")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
+		return nil, err // already a connect error
 	}
 
 	prefix := path.Join(name, branch)
@@ -224,20 +214,10 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	prefix := path.Join(getReq.Msg.Name, getReq.Msg.Branch)
 	s3key := path.Join(prefix, getReq.Msg.Key)
 
-	log.Info().
-		Str("Owner", getReq.Msg.Owner).
-		Str("ProviderType", fromProviderV1(getReq.Msg.ProviderType)).
-		Msg("check the tenant exists")
-
 	// validate the owner
 	_, err := zs.validateOwner(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType))
 	if err != nil {
-		if errors.Is(err, errTenantNotFound) {
-			return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cache.v1.CacheService.CreateEntry permission denied"))
-		}
-
-		log.Error().Err(err).Msg("failed to validate owner")
-		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
+		return nil, err // already a connect error
 	}
 
 	log.Info().
@@ -301,13 +281,19 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	span.SetName("ZipStash.validateOwner")
 	defer span.End()
 
+	log.Info().
+		Str("Owner", owner).
+		Str("ProviderType", provider).
+		Msg("check the tenant exists")
+
 	exists, rec, err := zs.store.ExistsTenantByKey(ctx, index.TenantKey(provider, owner))
 	if err != nil {
-		return index.TenantRecord{}, fmt.Errorf("failed to check if tenant exists: %w", err)
+		log.Error().Err(err).Msg("failed to validate owner")
+		return index.TenantRecord{}, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
 	}
 
 	if !exists {
-		return index.TenantRecord{}, errTenantNotFound
+		return index.TenantRecord{}, connect.NewError(connect.CodePermissionDenied, errors.New("cache.v1.CacheService permission denied"))
 	}
 
 	return rec, nil
