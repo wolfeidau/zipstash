@@ -52,6 +52,28 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 
 	cl := globals.Client
 
+	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %w", err)
+	}
+
+	checkReq := newAuthenticatedProviderRequest(&cachev1.CheckEntryRequest{
+		Key:    c.Key,
+		Branch: c.Branch,
+		Name:   c.Name,
+		Owner:  c.Owner,
+	}, token, c.TokenSource, globals.Version)
+
+	checkRes, err := cl.CheckEntry(ctx, checkReq)
+	if err != nil {
+		return fmt.Errorf("failed to check entry: %w", err)
+	}
+
+	if checkRes.Msg.Exists {
+		log.Info().Msg("cache entry already exists")
+		return nil
+	}
+
 	paths, err := checkPath(c.Path)
 	if err != nil {
 		return fmt.Errorf("failed to check path: %w", err)
@@ -70,11 +92,6 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		Str("sha256sum", fileInfo.Sha256sum).
 		Dur("duration_ms", time.Since(start)).
 		Msg("archive built")
-
-	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get token: %w", err)
-	}
 
 	req := newAuthenticatedProviderRequest(&cachev1.CreateEntryRequest{
 		ProviderType: convertProviderTypeV1(c.TokenSource),
