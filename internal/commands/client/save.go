@@ -58,10 +58,11 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 	}
 
 	checkReq := newAuthenticatedProviderRequest(&cachev1.CheckEntryRequest{
-		Key:    c.Key,
-		Branch: c.Branch,
-		Name:   c.Name,
-		Owner:  c.Owner,
+		Key:          c.Key,
+		Branch:       c.Branch,
+		Name:         c.Name,
+		Owner:        c.Owner,
+		ProviderType: convertProviderTypeV1(c.TokenSource),
 	}, token, c.TokenSource, globals.Version)
 
 	checkRes, err := cl.CheckEntry(ctx, checkReq)
