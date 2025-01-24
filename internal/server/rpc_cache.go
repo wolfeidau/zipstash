@@ -50,6 +50,40 @@ func NewCacheServiceHandler(ctx context.Context, cfg CacheConfig, store *index.S
 	}
 }
 
+func buildCacheKey(owner, provider, key string) string {
+	return path.Join(owner, provider, key)
+}
+
+func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error) {
+
+	owner := checkReq.Msg.Owner
+
+	log.Info().
+		Str("Owner", owner).
+		Str("ProviderType", fromProviderV1(checkReq.Msg.ProviderType)).
+		Msg("check the tenant exists")
+
+	// validate the owner
+	_, err := zs.validateOwner(ctx, owner, fromProviderV1(checkReq.Msg.ProviderType))
+	if err != nil {
+		return nil, err // already a connect error
+	}
+
+	cacheKey := buildCacheKey(owner, fromProviderV1(checkReq.Msg.ProviderType), checkReq.Msg.Key)
+
+	// does the cache entry already exist?
+	exists, cacheRec, err := zs.store.ExistsCache(ctx, cacheKey)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if cache entry exists")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CheckEntry internal error"))
+	}
+
+	return connect.NewResponse(&v1.CheckEntryResponse{
+		Exists:    exists,
+		Sha256Sum: cacheRec.Sha256,
+	}), nil
+}
+
 func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *connect.Request[v1.CreateEntryRequest]) (*connect.Response[v1.CreateEntryResponse], error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetName("Cache.CreateEntry")
@@ -72,22 +106,20 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	name := createReq.Msg.CacheEntry.Name
 	branch := createReq.Msg.CacheEntry.Branch
 
-	prefix := path.Join(name, branch)
-	s3key := path.Join(prefix, createReq.Msg.CacheEntry.Key)
+	// cacheKey := path.Join(name, branch, createReq.Msg.CacheEntry.Key)
+	cacheKey := buildCacheKey(owner, fromProviderV1(createReq.Msg.ProviderType), createReq.Msg.CacheEntry.Key)
 
 	// does the cache entry already exist?
-	exists, cacheRec, err := zs.store.ExistsCache(ctx, s3key)
+	exists, cacheRec, err := zs.store.ExistsCache(ctx, cacheKey)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
+	// NOTE: this is a secondary check for exists to prevent a race conditions
 	if exists {
 		log.Info().Msg("cache entry already exists")
-		if cacheRec.Sha256 == createReq.Msg.CacheEntry.Sha256Sum {
-			log.Info().Msg("cache entry already exists with matching sha256sum")
-			return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("cache.v1.CacheService.CreateEntry cache entry already exists"))
-		}
+		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("cache.v1.CacheService.CreateEntry cache entry already exists"))
 	}
 
 	// generate an identifier to track the upload
@@ -96,13 +128,12 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	log.Info().
 		Str("Key", createReq.Msg.CacheEntry.Key).
 		Str("uploadID", uploadID).
-		Str("Prefix", prefix).
 		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
 		Msg("presign upload request")
 
 	uploadInstructs, err := zs.presigner.GenerateFileUploadInstructions(
 		ctx,
-		s3key,
+		cacheKey,
 		createReq.Msg.CacheEntry.Sha256Sum,
 		createReq.Msg.CacheEntry.Compression,
 		createReq.Msg.CacheEntry.FileSize,
@@ -167,21 +198,20 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.UpdateEntry cache entry does not exist"))
 	}
 
-	prefix := path.Join(cacheRec.Name, cacheRec.Branch)
-	s3key := path.Join(prefix, cacheRec.ID)
+	// cacheKey := path.Join(cacheRec.Name, cacheRec.Branch, cacheRec.ID)
+	cacheKey := buildCacheKey(cacheRec.Owner, cacheRec.Provider, cacheRec.ID)
 
 	log.Info().
 		Str("Id", updateReq.Msg.Id).
-		Str("Prefix", prefix).
 		Str("Key", cacheRec.ID).
-		Str("S3Key", s3key).
+		Str("cacheKey", cacheKey).
 		Msg("cache entry update request")
 
 	// complete the multipart upload if it exists and the upload ID matches
 	if cacheRec.MultipartUploadId != nil {
 		_, err := zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(zs.cfg.CacheBucket),
-			Key:      aws.String(s3key),
+			Key:      aws.String(cacheKey),
 			UploadId: cacheRec.MultipartUploadId,
 			MultipartUpload: &types.CompletedMultipartUpload{
 				Parts: fromCachePartETagV1(updateReq.Msg.MultipartEtags),
@@ -197,7 +227,7 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	cacheRec.UpdatedAt = time.Now()
 
 	// move the inflight cache entry to the cache index
-	err = zs.store.PutCache(ctx, s3key, cacheRec, cacheRecordTTL)
+	err = zs.store.PutCache(ctx, cacheKey, cacheRec, cacheRecordTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
@@ -213,22 +243,22 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	span.SetName("Cache.GetEntry")
 	defer span.End()
 
-	prefix := path.Join(getReq.Msg.Name, getReq.Msg.Branch)
-	s3key := path.Join(prefix, getReq.Msg.Key)
-
 	// validate the owner
 	_, err := zs.validateOwner(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType))
 	if err != nil {
 		return nil, err // already a connect error
 	}
 
+	// cacheKey := path.Join(getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
+	cacheKey := buildCacheKey(getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Key)
+
 	log.Info().
-		Str("Prefix", prefix).
-		Str("Key", getReq.Msg.Key).
+		Str("key", getReq.Msg.Key).
+		Str("cacheKey", cacheKey).
 		Msg("cache entry get request")
 
 	// does the cache entry exist?
-	exists, record, err := zs.store.ExistsCache(ctx, s3key)
+	exists, record, err := zs.store.ExistsCache(ctx, cacheKey)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
@@ -239,7 +269,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.GetEntry cache entry does not exist"))
 	}
 
-	exists, res, err := zs.exists(ctx, getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
+	exists, res, err := zs.existsInS3(ctx, cacheKey)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
@@ -250,13 +280,13 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	}
 
 	log.Info().
-		Str("Prefix", prefix).
-		Str("Key", getReq.Msg.Key).
+		Str("cacheKey", cacheKey).
+		Str("key", getReq.Msg.Key).
 		Str("sha256sum", aws.ToString(res.ChecksumSHA256)).Msg("cache entry found")
 
 	downloadInstructs, err := zs.presigner.GenerateFileDownloadInstructions(
 		ctx,
-		s3key,
+		cacheKey,
 		aws.ToInt64(res.ContentLength),
 	)
 	if err != nil {
@@ -301,13 +331,11 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	return rec, nil
 }
 
-func (zs *CacheServiceHandler) exists(ctx context.Context, name, branch, key string) (bool, *s3.HeadObjectOutput, error) {
+func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bool, *s3.HeadObjectOutput, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetName("ZipStash.exists")
 	defer span.End()
 
-	prefix := path.Join(name, branch)
-	s3key := path.Join(prefix, key)
 	res, err := zs.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(zs.cfg.CacheBucket),
 		Key:    aws.String(s3key),

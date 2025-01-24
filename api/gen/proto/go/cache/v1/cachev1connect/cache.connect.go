@@ -41,6 +41,8 @@ const (
 	CacheServiceUpdateEntryProcedure = "/cache.v1.CacheService/UpdateEntry"
 	// CacheServiceGetEntryProcedure is the fully-qualified name of the CacheService's GetEntry RPC.
 	CacheServiceGetEntryProcedure = "/cache.v1.CacheService/GetEntry"
+	// CacheServiceCheckEntryProcedure is the fully-qualified name of the CacheService's CheckEntry RPC.
+	CacheServiceCheckEntryProcedure = "/cache.v1.CacheService/CheckEntry"
 )
 
 // CacheServiceClient is a client for the cache.v1.CacheService service.
@@ -51,6 +53,8 @@ type CacheServiceClient interface {
 	UpdateEntry(context.Context, *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.UpdateEntryResponse], error)
 	// GetEntry retrieves a cache entry by key
 	GetEntry(context.Context, *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error)
+	// CheckEntry checks if a cache entry exists
+	CheckEntry(context.Context, *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error)
 }
 
 // NewCacheServiceClient constructs a client for the cache.v1.CacheService service. By default, it
@@ -82,6 +86,12 @@ func NewCacheServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(cacheServiceMethods.ByName("GetEntry")),
 			connect.WithClientOptions(opts...),
 		),
+		checkEntry: connect.NewClient[v1.CheckEntryRequest, v1.CheckEntryResponse](
+			httpClient,
+			baseURL+CacheServiceCheckEntryProcedure,
+			connect.WithSchema(cacheServiceMethods.ByName("CheckEntry")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -90,6 +100,7 @@ type cacheServiceClient struct {
 	createEntry *connect.Client[v1.CreateEntryRequest, v1.CreateEntryResponse]
 	updateEntry *connect.Client[v1.UpdateEntryRequest, v1.UpdateEntryResponse]
 	getEntry    *connect.Client[v1.GetEntryRequest, v1.GetEntryResponse]
+	checkEntry  *connect.Client[v1.CheckEntryRequest, v1.CheckEntryResponse]
 }
 
 // CreateEntry calls cache.v1.CacheService.CreateEntry.
@@ -107,6 +118,11 @@ func (c *cacheServiceClient) GetEntry(ctx context.Context, req *connect.Request[
 	return c.getEntry.CallUnary(ctx, req)
 }
 
+// CheckEntry calls cache.v1.CacheService.CheckEntry.
+func (c *cacheServiceClient) CheckEntry(ctx context.Context, req *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error) {
+	return c.checkEntry.CallUnary(ctx, req)
+}
+
 // CacheServiceHandler is an implementation of the cache.v1.CacheService service.
 type CacheServiceHandler interface {
 	// CreateEntry creates a new cache entry
@@ -115,6 +131,8 @@ type CacheServiceHandler interface {
 	UpdateEntry(context.Context, *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.UpdateEntryResponse], error)
 	// GetEntry retrieves a cache entry by key
 	GetEntry(context.Context, *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error)
+	// CheckEntry checks if a cache entry exists
+	CheckEntry(context.Context, *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error)
 }
 
 // NewCacheServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -142,6 +160,12 @@ func NewCacheServiceHandler(svc CacheServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(cacheServiceMethods.ByName("GetEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	cacheServiceCheckEntryHandler := connect.NewUnaryHandler(
+		CacheServiceCheckEntryProcedure,
+		svc.CheckEntry,
+		connect.WithSchema(cacheServiceMethods.ByName("CheckEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/cache.v1.CacheService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CacheServiceCreateEntryProcedure:
@@ -150,6 +174,8 @@ func NewCacheServiceHandler(svc CacheServiceHandler, opts ...connect.HandlerOpti
 			cacheServiceUpdateEntryHandler.ServeHTTP(w, r)
 		case CacheServiceGetEntryProcedure:
 			cacheServiceGetEntryHandler.ServeHTTP(w, r)
+		case CacheServiceCheckEntryProcedure:
+			cacheServiceCheckEntryHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -169,4 +195,8 @@ func (UnimplementedCacheServiceHandler) UpdateEntry(context.Context, *connect.Re
 
 func (UnimplementedCacheServiceHandler) GetEntry(context.Context, *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("cache.v1.CacheService.GetEntry is not implemented"))
+}
+
+func (UnimplementedCacheServiceHandler) CheckEntry(context.Context, *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("cache.v1.CacheService.CheckEntry is not implemented"))
 }
