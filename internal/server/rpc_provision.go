@@ -26,11 +26,17 @@ func (ps *ProvisionServiceHandler) CreateTenant(ctx context.Context, req *connec
 	span.SetName("Provision.CreateTenant")
 	defer span.End()
 
-	err := ps.store.PutTenant(ctx, req.Msg.Id, index.TenantRecord{
+	value := index.TenantRecord{
 		ID:           req.Msg.Id,
 		ProviderType: fromProviderV1(req.Msg.ProviderType),
 		Owner:        req.Msg.Slug,
-	})
+	}
+	if err := value.Validate(); err != nil {
+		log.Error().Err(err).Msg("failed to validate tenant record")
+		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.ProvisionService.CreateTenant internal error"))
+	}
+
+	err := ps.store.PutTenant(ctx, req.Msg.Id, value)
 	if err != nil {
 		span.RecordError(err)
 		if errors.Is(err, index.ErrAlreadyExists) {

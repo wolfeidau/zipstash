@@ -20,7 +20,6 @@ import (
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/provision/v1/provisionv1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"github.com/wolfeidau/zipstash/internal/provider"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -68,7 +67,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 
 		opts = append(opts, connect.WithInterceptors(
 			ciauth.NewInterceptorWithConfig(ciauth.Config{
-				Providers: provider.DefaultEndpoints,
+				Providers: ciauth.DefaultEndpoints,
 			}),
 		))
 

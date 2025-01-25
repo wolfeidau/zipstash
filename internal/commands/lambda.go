@@ -21,7 +21,6 @@ import (
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"github.com/wolfeidau/zipstash/internal/provider"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -58,7 +57,7 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	// Add OIDC interceptor
 	opts = append(opts, connect.WithInterceptors(
 		ciauth.NewInterceptorWithConfig(ciauth.Config{
-			Providers: provider.DefaultEndpoints,
+			Providers: ciauth.DefaultEndpoints,
 		}),
 	))
 

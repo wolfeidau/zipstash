@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/wolfeidau/zipstash/internal/provider"
+	"github.com/wolfeidau/zipstash/internal/ciauth"
 )
 
 type CacheRecord struct {
@@ -30,7 +30,7 @@ type TenantRecord struct {
 }
 
 func (r *TenantRecord) Validate() error {
-	if !slices.Contains(provider.DefaultProviders, r.ProviderType) {
+	if !slices.Contains(ciauth.DefaultProviders, r.ProviderType) {
 		return fmt.Errorf("invalid provider_type: `%s`", r.ProviderType)
 	}
 

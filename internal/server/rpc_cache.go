@@ -23,7 +23,7 @@ import (
 
 const (
 	cacheRecordInflightTTL = 30 * time.Minute
-	cacheRecordTTL         = 24 * time.Hour
+	cacheRecordTTL         = 7 * 24 * time.Hour
 )
 
 type CacheConfig struct {
@@ -294,6 +294,8 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
 	}
 
+	// TODO: touch the s3 object to update the last modified time
+
 	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
 			Key:         getReq.Msg.Key,
@@ -313,8 +315,11 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	span.SetName("ZipStash.validateOwner")
 	defer span.End()
 
+	identity := ciauth.GetCIAuthIdentity(ctx)
+
 	log.Info().
 		Str("Owner", owner).
+		Str("identity.Owner", identity.GetOwner()).
 		Str("ProviderType", provider).
 		Msg("check the tenant exists")
 

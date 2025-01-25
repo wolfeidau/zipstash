@@ -137,10 +137,6 @@ func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) er
 	ctx, span := trace.Start(ctx, "Store.PutTenant")
 	defer span.End()
 
-	if value.Validate() != nil {
-		return fmt.Errorf("failed to validate tenant record: %w", value.Validate())
-	}
-
 	_, err := s.tenantStore.Create(ctx, "tenant", id, value,
 		s.tenantStore.WriteWithExtraFields(map[string]any{
 			"created": time.Now().UTC().Format(time.RFC3339),
