@@ -62,11 +62,19 @@ func NewInterceptorWithConfig(cfg Config) connect.UnaryInterceptorFunc {
 				attribute.String("issuer", idToken.Issuer),
 			)
 
-			// store the token in the context
-			ctx = context.WithValue(ctx, idTokenKey{}, &CIAuthIdentity{
+			cia := &CIAuthIdentity{
 				Provider: providerName,
 				IDToken:  idToken,
-			})
+			}
+
+			err = cia.ParseClaims()
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				return nil, connect.NewError(connect.CodeUnauthenticated, err)
+			}
+
+			// store the token in the context
+			ctx = context.WithValue(ctx, idTokenKey{}, cia)
 
 			return next(ctx, req)
 		}

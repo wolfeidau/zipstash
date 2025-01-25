@@ -67,4 +67,35 @@ type CIAuthIdentity struct {
 	IDToken  *oidc.IDToken
 	Provider string
 	Subject  string
+	claims   any
+}
+
+func (cia *CIAuthIdentity) ParseClaims() error {
+	var claims any
+	switch cia.Provider {
+	case GitHubActions:
+		claims = &GitHubActionsClaims{}
+	case Buildkite:
+		claims = &BuildkiteClaims{}
+	default:
+		return fmt.Errorf("unsupported provider")
+	}
+
+	if err := cia.IDToken.Claims(claims); err != nil {
+		return fmt.Errorf("failed to parse claims: %w", err)
+	}
+	cia.claims = claims
+
+	return nil
+}
+
+func (cia *CIAuthIdentity) GetOwner() string {
+	switch claims := cia.claims.(type) {
+	case *GitHubActionsClaims:
+		return claims.RepositoryOwner
+	case *BuildkiteClaims:
+		return claims.OrganizationSlug
+	default:
+		return ""
+	}
 }
