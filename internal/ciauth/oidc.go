@@ -1,6 +1,7 @@
 package ciauth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,24 +15,38 @@ const (
 )
 
 var (
-	DefaultEndpoints = map[string]string{
-		GitHubActions: "https://token.actions.githubusercontent.com",
-		GitLab:        "https://gitlab.com",
-		Buildkite:     "https://agent.buildkite.com",
+	ErrInvalidProvider   = errors.New("invalid provider")
+	DefaultOIDCProviders = map[string]OIDCProvider{
+		GitHubActions: {
+			Issuer:  "https://token.actions.githubusercontent.com",
+			JWKSURL: "https://token.actions.githubusercontent.com/.well-known/jwks",
+		},
+		GitLab: {
+			Issuer:  "https://gitlab.com",
+			JWKSURL: "https://gitlab.com/oauth/discovery/keys",
+		},
+		Buildkite: {
+			Issuer:  "https://agent.buildkite.com",
+			JWKSURL: "https://agent.buildkite.com/.well-known/jwks",
+		},
 	}
 
-	DefaultProviders = []string{
+	DefaultProviderNames = []string{
 		GitHubActions,
 		GitLab,
 		Buildkite,
 	}
 )
 
+type OIDCProvider struct {
+	Issuer  string
+	JWKSURL string
+}
+
 // BuildkiteClaims is the struct for the claims in the Buildkite OIDC token
 type BuildkiteClaims struct {
 	OrganizationSlug  string `json:"organization_slug"`
 	PipelineSlug      string `json:"pipeline_slug"`
-	BuildNumber       int    `json:"build_number"`
 	BuildBranch       string `json:"build_branch"`
 	BuildTag          string `json:"build_tag"`
 	BuildCommit       string `json:"build_commit"`
@@ -40,6 +55,7 @@ type BuildkiteClaims struct {
 	AgentId           string `json:"agent_id"`
 	BuildSource       string `json:"build_source"`
 	RunnerEnvironment string `json:"runner_environment"`
+	BuildNumber       int    `json:"build_number"`
 }
 
 type GitHubActionsClaims struct {

@@ -30,7 +30,7 @@ type TenantRecord struct {
 }
 
 func (r *TenantRecord) Validate() error {
-	if !slices.Contains(ciauth.DefaultProviders, r.ProviderType) {
+	if !slices.Contains(ciauth.DefaultProviderNames, r.ProviderType) {
 		return fmt.Errorf("invalid provider_type: `%s`", r.ProviderType)
 	}
 

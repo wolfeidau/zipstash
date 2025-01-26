@@ -30,10 +30,10 @@ func TestTransport_RoundTrip(t *testing.T) {
 		req func(method, url string, body io.Reader) *http.Request
 	}
 	tests := []struct {
-		name    string
-		fields  fields
 		args    args
+		name    string
 		want    string
+		fields  fields
 		wantErr bool
 	}{
 		{

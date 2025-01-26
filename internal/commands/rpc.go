@@ -65,10 +65,14 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 			return dynamodb.NewFromConfig(awscfg)
 		}
 
+		oidcValidator, err := ciauth.NewOIDCValidator(ctx, ciauth.DefaultOIDCProviders)
+		if err != nil {
+			return fmt.Errorf("failed to create OIDC validator: %w", err)
+		}
+
+		// Add OIDC interceptor
 		opts = append(opts, connect.WithInterceptors(
-			ciauth.NewInterceptorWithConfig(ciauth.Config{
-				Providers: ciauth.DefaultEndpoints,
-			}),
+			ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator),
 		))
 
 	}

@@ -110,7 +110,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	cacheKey := buildCacheKey(owner, fromProviderV1(createReq.Msg.ProviderType), createReq.Msg.CacheEntry.Key)
 
 	// does the cache entry already exist?
-	exists, cacheRec, err := zs.store.ExistsCache(ctx, cacheKey)
+	exists, _, err := zs.store.ExistsCache(ctx, cacheKey)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
@@ -143,7 +143,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
 	}
 
-	cacheRec = index.CacheRecord{
+	cacheRec := index.CacheRecord{
 		ID:                createReq.Msg.CacheEntry.Key,
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
 		Name:              name,
@@ -157,13 +157,10 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		UpdatedAt:         time.Now(),
 	}
 
-	id := ciauth.GetCIAuthIdentity(ctx)
-	if id != nil {
-		cacheRec.Identity = &index.Identity{
-			Subject:  id.IDToken.Subject,
-			Issuer:   id.IDToken.Issuer,
-			Audience: id.IDToken.Audience,
-		}
+	identity := ciauth.GetOIDCIdentity(ctx)
+	cacheRec.Identity = &index.Identity{
+		Subject: identity.Subject(),
+		Issuer:  identity.Issuer(),
 	}
 
 	// create/update the cache entry in the cache index
@@ -315,11 +312,11 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	span.SetName("ZipStash.validateOwner")
 	defer span.End()
 
-	identity := ciauth.GetCIAuthIdentity(ctx)
+	identity := ciauth.GetOIDCIdentity(ctx)
 
 	log.Info().
 		Str("Owner", owner).
-		Str("identity.Owner", identity.GetOwner()).
+		Str("identity.Owner", identity.Owner()).
 		Str("ProviderType", provider).
 		Msg("check the tenant exists")
 
