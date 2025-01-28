@@ -3,7 +3,9 @@ steps:
     id: quality_assurance
     steps:
     - key: go_build
-      command: go build ./cmd/...
+      command: |
+        go mod download
+        go build ./cmd/...
       label: ':golang: mod build all the things'
       plugins:
         - docker-compose#v5.4.0:
