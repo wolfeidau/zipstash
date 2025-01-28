@@ -1,0 +1,22 @@
+# Honeycomb Collector configuration
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "localhost:4317"
+exporters:
+  otlp/traces:
+    endpoint: "${env:HONEYCOMB_ENDPOINT}"
+    headers:
+      "x-honeycomb-team": "${env:HONEYCOMB_API_KEY}"
+      "x-honeycomb-dataset": "${env:HONEYCOMB_DATASET}"
+processors:
+    decouple:
+      max_queue_size:  20
+service:
+  extensions: []
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [decouple]
+      exporters: [otlp/traces]

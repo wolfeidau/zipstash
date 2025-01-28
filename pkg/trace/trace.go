@@ -20,6 +20,43 @@ import (
 var globalProvider *sdktrace.TracerProvider
 var tracer trace.Tracer
 
+func NewLambdaProvider(ctx context.Context, name, version string) (*sdktrace.TracerProvider, error) {
+	// Create and start new OTLP trace exporter
+	traceExporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint("0.0.0.0:4317"),
+		// otlptracegrpc.WithDialOption(grpc.WithBlock()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exporter: %w", err)
+	}
+
+	res, err := newResource(ctx, name, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(traceExporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	tracer = tp.Tracer(name)
+
+	// globalProvider = &Provider{tp: tp}
+	globalProvider = tp
+
+	return globalProvider, nil
+}
+
 func NewProvider(ctx context.Context, name, version string) (*sdktrace.TracerProvider, error) {
 	exp, err := newExporter(ctx)
 	if err != nil {

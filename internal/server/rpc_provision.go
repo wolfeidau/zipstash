@@ -6,9 +6,10 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/rs/zerolog/log"
+
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provision/v1"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 type ProvisionServiceHandler struct {
@@ -22,8 +23,7 @@ func NewProvisionServiceHandler(store *index.Store) *ProvisionServiceHandler {
 }
 
 func (ps *ProvisionServiceHandler) CreateTenant(ctx context.Context, req *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("Provision.CreateTenant")
+	ctx, span := trace.Start(ctx, "Provision.CreateTenant")
 	defer span.End()
 
 	value := index.TenantRecord{
@@ -53,8 +53,7 @@ func (ps *ProvisionServiceHandler) CreateTenant(ctx context.Context, req *connec
 }
 
 func (ps *ProvisionServiceHandler) GetTenant(ctx context.Context, getTenantReq *connect.Request[v1.GetTenantRequest]) (*connect.Response[v1.GetTenantResponse], error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("Provision.GetTenant")
+	ctx, span := trace.Start(ctx, "Provision.GetTenant")
 	defer span.End()
 
 	tenant, err := ps.store.GetTenant(ctx, getTenantReq.Msg.Id)

@@ -21,6 +21,7 @@ import (
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
+	"github.com/wolfeidau/zipstash/internal/middleware"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -32,7 +33,7 @@ type LambdaServerCmd struct {
 }
 
 func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
-	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
+	tp, err := trace.NewLambdaProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
 	if err != nil {
 		log.Fatal().Msgf("failed to create trace provider: %v", err)
 	}
@@ -59,11 +60,6 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		return fmt.Errorf("failed to create OIDC validator: %w", err)
 	}
 
-	// Add OIDC interceptor
-	opts = append(opts, connect.WithInterceptors(
-		ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator),
-	))
-
 	var oteloptions []otelconnect.Option
 	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
 	if s.TrustRemote {
@@ -74,7 +70,11 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}
-	opts = append(opts, connect.WithInterceptors(otelInterceptor))
+	opts = append(opts, connect.WithInterceptors(
+		otelInterceptor,
+		ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator),
+	),
+	)
 
 	store := index.MustNewStore(ctx, index.StoreConfig{
 		CacheIndexTable:   s.CacheIndexTable,
@@ -95,7 +95,9 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	ch := lmw.New(
 		raw.New(raw.Fields(flds)),
 		zlog.New(zlog.Fields(flds)),
-	).Then(lambdaextras.GenericHandler(httpadapter.NewV2(mux).ProxyWithContext))
+	).Then(lambdaextras.GenericHandler(httpadapter.NewV2(
+		middleware.APIGatewayV2(middleware.RealIP(mux)),
+	).ProxyWithContext))
 
 	lambda.Start(ch)
 

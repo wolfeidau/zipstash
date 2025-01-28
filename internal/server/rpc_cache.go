@@ -14,11 +14,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 const (
@@ -85,8 +85,7 @@ func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect
 }
 
 func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *connect.Request[v1.CreateEntryRequest]) (*connect.Response[v1.CreateEntryResponse], error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("Cache.CreateEntry")
+	ctx, span := trace.Start(ctx, "Cache.CreateEntry")
 	defer span.End()
 
 	owner := createReq.Msg.CacheEntry.Owner
@@ -179,8 +178,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 }
 
 func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.UpdateEntryResponse], error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("Cache.UpdateEntry")
+	ctx, span := trace.Start(ctx, "Cache.UpdateEntry")
 	defer span.End()
 
 	// does the in flight cache entry exist?
@@ -236,10 +234,8 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 }
 
 func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("Cache.GetEntry")
+	ctx, span := trace.Start(ctx, "Cache.GetEntry")
 	defer span.End()
-
 	// validate the owner
 	_, err := zs.validateOwner(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType))
 	if err != nil {
@@ -308,8 +304,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 }
 
 func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provider string) (index.TenantRecord, error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("ZipStash.validateOwner")
+	ctx, span := trace.Start(ctx, "Cache.validateOwner")
 	defer span.End()
 
 	identity := ciauth.GetOIDCIdentity(ctx)
@@ -334,8 +329,7 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 }
 
 func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bool, *s3.HeadObjectOutput, error) {
-	span := trace.SpanFromContext(ctx)
-	span.SetName("ZipStash.exists")
+	ctx, span := trace.Start(ctx, "Cache.existsInS3")
 	defer span.End()
 
 	res, err := zs.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
