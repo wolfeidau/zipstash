@@ -28,7 +28,7 @@ type AdminLambdaServerCmd struct {
 }
 
 func (s *AdminLambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
-	tp, err := trace.NewProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
+	tp, err := trace.NewLambdaProvider(ctx, "github.com/wolfeidau/zipstash", globals.Version)
 	if err != nil {
 		log.Fatal().Msgf("failed to create trace provider: %v", err)
 	}

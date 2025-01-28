@@ -65,8 +65,9 @@ deploy-api:
 		--stack-name $(APPNAME)-$(STAGE)-$(BRANCH)-api \
 		--parameter-overrides AppName=$(APPNAME) Stage=$(STAGE) Branch=$(BRANCH) \
 			ContainerImageUri=$(DOCKER_REPO):$(BRANCH)_${GIT_HASH} \
-			OtelExporterEndpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT) \
-			OtelExporterHeaders="$(OTEL_EXPORTER_HEADERS)"
+			HoneycombApiKey=$(HONEYCOMB_API_KEY) \
+			HoneycombDataset=$(HONEYCOMB_DATASET) \
+			HoneycombEndpoint=$(HONEYCOMB_ENDPOINT)
 
 .PHONY: logs
 logs:

@@ -12,8 +12,9 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/rs/zerolog/log"
-	"github.com/wolfeidau/zipstash/pkg/trace"
 	"go.opentelemetry.io/otel/codes"
+
+	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 // OIDCValidator manages OIDC token validation
@@ -55,7 +56,6 @@ func (v *OIDCCachingValidator) registerJWKSEndpoints(ctx context.Context, oidcPr
 }
 
 func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, tokenStr, expectedAudience string) (jwt.Token, error) {
-
 	oidcProvider, ok := v.oidcProviders[providerName]
 	if !ok {
 		return nil, fmt.Errorf("unknown provider: %s", providerName)
@@ -77,6 +77,7 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, 
 	}
 
 	// Additional custom validations can be added here
+	log.Info().Any("token", token).Msg("token validated")
 
 	return token, nil
 }

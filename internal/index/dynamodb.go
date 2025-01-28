@@ -54,7 +54,7 @@ func MustNewStore(ctx context.Context, config StoreConfig) *Store {
 }
 
 func (s *Store) GetCache(ctx context.Context, id string) (CacheRecord, error) {
-	ctx, span := trace.Start(ctx, "Store.Get")
+	ctx, span := trace.Start(ctx, "Store.GetCache")
 	defer span.End()
 
 	_, cacheRec, err := s.cacheStore.Get(ctx, "cache", id)
@@ -70,7 +70,7 @@ func (s *Store) GetCache(ctx context.Context, id string) (CacheRecord, error) {
 }
 
 func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, error) {
-	ctx, span := trace.Start(ctx, "Store.Get")
+	ctx, span := trace.Start(ctx, "Store.ExistsCache")
 	defer span.End()
 
 	_, cacheRec, err := s.cacheStore.Get(ctx, "cache", id)
@@ -86,7 +86,7 @@ func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, 
 }
 
 func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, lifetime time.Duration) error {
-	ctx, span := trace.Start(ctx, "Store.Put")
+	ctx, span := trace.Start(ctx, "Store.PutCache")
 	defer span.End()
 
 	_, err := s.cacheStore.Create(ctx, "cache", id, value,
@@ -107,7 +107,7 @@ func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, life
 }
 
 func (s *Store) DeleteCache(ctx context.Context, id string) error {
-	ctx, span := trace.Start(ctx, "Store.Delete")
+	ctx, span := trace.Start(ctx, "Store.DeleteCache")
 	defer span.End()
 
 	err := s.cacheStore.Delete(ctx, "cache", id)

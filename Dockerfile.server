@@ -1,15 +1,26 @@
 FROM golang:1.23-alpine AS build_base
-RUN apk add --no-cache git
-WORKDIR /src
+RUN apk add --no-cache git make
+
 ARG APP_VERSION
 
-COPY . /src
-WORKDIR /src
+COPY . /src/zipstash
+WORKDIR /src/zipstash
 RUN go mod download
 RUN GOOS=linux CGO_ENABLED=0 go build -ldflags "-s -w -X 'main.version=$APP_VERSION'" -trimpath -o bootstrap ./cmd/zipstash-server
 
+RUN git clone https://github.com/open-telemetry/opentelemetry-lambda /src/opentelemetry-lambda
+WORKDIR /src/opentelemetry-lambda/collector
+RUN BUILDTAGS="lambdacomponents.custom,lambdacomponents.receiver.otlp,lambdacomponents.processor.all,lambdacomponents.exporter.otlp,lambdacomponents.connector.spanmetrics" make build
+
 FROM alpine:3.21
+
+ENV OTEL_TRACES_SAMPLER=always_on
+ENV OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION=true
+
 RUN apk add ca-certificates
-COPY --from=build_base /src/bootstrap /app/bootstrap
+COPY --from=build_base /src/zipstash/bootstrap /app/bootstrap
+
+COPY --from=build_base /src/opentelemetry-lambda/collector/build/extensions/collector /opt/extensions/collector
+COPY adot-config.yaml /opt/collector-config/config.yaml
 
 ENTRYPOINT ["/app/bootstrap"]

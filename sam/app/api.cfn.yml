@@ -21,14 +21,17 @@ Parameters:
   ContainerImageUri:
     Description: The container image URI which hosts the images.
     Type: String
-  OtelExporterEndpoint:
-    Description: The otel collector endpoint
-    Type: String
-    Default: https://api.honeycomb.io
-  OtelExporterHeaders:
-    Description: The headers to pass to the otel collector
-    Type: String
+  HoneycombApiKey:
+    Description: The honeycomb api key
     NoEcho: true
+    Type: String
+  HoneycombDataset:
+    Description: The honeycomb dataset
+    Type: String
+  HoneycombEndpoint:
+    Description: The honeycomb endpoint
+    Type: String
+    Default: "api.honeycomb.io:443"
 
 Outputs:
   AdminHttpAPIURL:
@@ -182,8 +185,9 @@ Resources:
           CACHE_INDEX_TABLE: !Ref CacheIndexTable
           TRACE_EXPORTER: grpc
           OTEL_SERVICE_NAME: zipstash
-          OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
-          OTEL_EXPORTER_OTLP_HEADERS: !Ref OtelExporterHeaders
+          HONEYCOMB_API_KEY: !Ref HoneycombApiKey
+          HONEYCOMB_DATASET: !Ref HoneycombDataset
+          HONEYCOMB_ENDPOINT: !Ref HoneycombEndpoint
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref CacheBucket
@@ -238,9 +242,10 @@ Resources:
           CACHE_BUCKET: !Ref CacheBucket
           CACHE_INDEX_TABLE: !Ref CacheIndexTable
           TRACE_EXPORTER: grpc
-          OTEL_SERVICE_NAME: zipstash
-          OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
-          OTEL_EXPORTER_OTLP_HEADERS: !Ref OtelExporterHeaders
+          OTEL_SERVICE_NAME: zipstash-admin
+          HONEYCOMB_API_KEY: !Ref HoneycombApiKey
+          HONEYCOMB_DATASET: !Ref HoneycombDataset
+          HONEYCOMB_ENDPOINT: !Ref HoneycombEndpoint
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref CacheBucket
