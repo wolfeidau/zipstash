@@ -46,7 +46,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 
 	var s3ClientFunc server.S3ClientFunc
 	var ddbClientFunc index.DynamoDBClientFunc
-	opts := []connect.HandlerOption{}
+	interceptors := []connect.Interceptor{}
 	if s.Local {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).
 			With().Caller().Logger()
@@ -71,10 +71,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		}
 
 		// Add OIDC interceptor
-		opts = append(opts, connect.WithInterceptors(
-			ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator),
-		))
-
+		interceptors = append(interceptors, ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator))
 	}
 
 	store := index.MustNewStore(ctx, index.StoreConfig{
@@ -93,7 +90,7 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}
-	opts = append(opts, connect.WithInterceptors(otelInterceptor))
+	interceptors = append(interceptors, otelInterceptor)
 
 	csh := server.NewCacheServiceHandler(ctx, server.CacheConfig{
 		CacheBucket: s.CacheBucket,
@@ -103,12 +100,12 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	psh := server.NewProvisionServiceHandler(store)
 
 	mux := http.NewServeMux()
-	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
+	path, handler := cachev1connect.NewCacheServiceHandler(csh, connect.WithInterceptors(interceptors...))
 
 	log.Info().Str("path", path).Str("add", s.Listen).Msg("serving")
 	mux.Handle(path, handler)
 
-	path, handler = provisionv1connect.NewProvisionServiceHandler(psh, opts...)
+	path, handler = provisionv1connect.NewProvisionServiceHandler(psh, connect.WithInterceptors(interceptors...))
 
 	log.Info().Str("path", path).Str("add", s.Listen).Msg("serving")
 	mux.Handle(path, handler)
