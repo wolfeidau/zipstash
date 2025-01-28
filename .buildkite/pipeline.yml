@@ -1,0 +1,56 @@
+steps:
+  - group: ':mag: QA'
+    id: quality_assurance
+    steps:
+    - key: go_build
+      command: go build ./cmd/...
+      label: ':golang: mod build all the things'
+      plugins:
+        - docker-compose#v5.4.0:
+            run: app
+            config: .buildkite/docker-compose.yml
+        - wolfeidau/zipstash#main:
+            id: go
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            paths: |
+              ~/go/pkg/mod
+              ~/.cache/go-build
+            endpoint: $ENDPOINT
+            repo: wolfeidau/zipstash
+            clean: true
+    - key: lint
+      label: ':golang: vet'
+      command: go vet ./...
+      plugins:
+        - docker-compose#v5.4.0:
+            run: app
+            config: .buildkite/docker-compose.yml
+        - wolfeidau/zipstash#main:
+            id: go
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            paths: |
+              ~/go/pkg/mod
+              ~/.cache/go-build
+            endpoint: $ENDPOINT
+            repo: wolfeidau/zipstash
+            clean: true
+            skip-save: true
+      depends_on: go_build
+    - key: test
+      label: ':golang: test'
+      command: go test -v -cover ./...
+      plugins:
+        - docker-compose#v5.4.0:
+            run: app
+            config: .buildkite/docker-compose.yml
+        - wolfeidau/zipstash#main:
+            id: go
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            paths: |
+              ~/go/pkg/mod
+              ~/.cache/go-build
+            endpoint: $ENDPOINT
+            repo: wolfeidau/zipstash
+            clean: true
+            skip-save: false
+      depends_on: go_build
