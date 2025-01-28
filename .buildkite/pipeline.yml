@@ -13,7 +13,7 @@ steps:
             config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.{mod,sum}' }}"
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
@@ -29,7 +29,7 @@ steps:
             config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.{mod,sum}' }}"
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
@@ -47,7 +47,7 @@ steps:
             config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.{mod,sum}' }}"
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
