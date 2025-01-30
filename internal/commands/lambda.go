@@ -17,11 +17,11 @@ import (
 	lmw "github.com/wolfeidau/lambda-go-extras/middleware"
 	"github.com/wolfeidau/lambda-go-extras/middleware/raw"
 	zlog "github.com/wolfeidau/lambda-go-extras/middleware/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1/cachev1connect"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
 	"github.com/wolfeidau/zipstash/internal/index"
-	"github.com/wolfeidau/zipstash/internal/middleware"
 	"github.com/wolfeidau/zipstash/internal/server"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -96,7 +96,7 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		raw.New(raw.Fields(flds)),
 		zlog.New(zlog.Fields(flds)),
 	).Then(lambdaextras.GenericHandler(httpadapter.NewV2(
-		middleware.APIGatewayV2(middleware.RealIP(mux)),
+		otelhttp.NewHandler(mux, "server", otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents)),
 	).ProxyWithContext))
 
 	lambda.Start(ch)
