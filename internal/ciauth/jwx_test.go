@@ -45,18 +45,59 @@ func TestValidate(t *testing.T) {
 
 	endpoints := buildTestEndpoints(srv.URL)
 
-	tok := buildTestJWT(t, srv.URL, audience)
-
-	rawToken, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), jwkey))
-	assert.NoError(err)
-
 	ov, err := NewOIDCValidator(context.TODO(), endpoints)
 	assert.NoError(err)
 
-	validToken, err := ov.ValidateToken(context.TODO(), "buildkite", string(rawToken), audience)
-	assert.NoError(err)
-	issuer, _ := validToken.Issuer()
-	assert.Equal(issuer, srv.URL)
+	tests := []struct {
+		name     string
+		audience string
+		issuer   string
+		provider string
+		wantErr  bool
+	}{
+		{
+			name:     "valid audience",
+			audience: audience,
+			issuer:   srv.URL,
+			provider: "buildkite",
+		},
+		{
+			name:     "invalid audience",
+			audience: "invalid",
+			issuer:   srv.URL,
+			provider: "buildkite",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid issuer",
+			audience: audience,
+			issuer:   "github.com",
+			provider: "buildkite",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := require.New(t)
+
+			tok := buildTestJWT(t, tt.issuer, tt.audience)
+
+			rawToken, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256(), jwkey))
+			assert.NoError(err)
+
+			oidcId, err := ov.ValidateToken(context.TODO(), string(rawToken), audience)
+			if tt.wantErr {
+				assert.Error(err)
+				return
+			}
+			assert.NoError(err)
+
+			assert.Equal(srv.URL, oidcId.Issuer())
+			assert.Equal(tt.provider, oidcId.Provider())
+		})
+	}
+
 }
 
 func TestEmptyUnaryInterceptorFunc(t *testing.T) {
@@ -170,11 +211,11 @@ func buildTestEndpoints(url string) map[string]OIDCProvider {
 	}
 }
 
-func buildTestJWT(t *testing.T, url, audience string) jwt.Token {
+func buildTestJWT(t *testing.T, issuer, audience string) jwt.Token {
 	issueDate := time.Now()
 
 	tok, err := jwt.NewBuilder().
-		Issuer(url).
+		Issuer(issuer).
 		Audience([]string{audience}).
 		Subject("organization:abc123:pipeline:zipstash:ref:refs/heads/feat_buildkite_pipeline:commit:abc123456:step:test").
 		IssuedAt(issueDate).

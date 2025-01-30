@@ -55,7 +55,7 @@ func (v *OIDCCachingValidator) registerJWKSEndpoints(ctx context.Context, oidcPr
 	return nil
 }
 
-func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, tokenStr, expectedAudience string) (jwt.Token, error) {
+func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, tokenStr, expectedAudience string) (OIDCIdentity, error) {
 	// parse the JWT with the expected audience
 	token, err := jwt.Parse(
 		[]byte(tokenStr),
@@ -73,7 +73,7 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, 
 	}
 
 	// get the JWK set for the issuer
-	for _, oidcProvider := range v.oidcProviders {
+	for providerName, oidcProvider := range v.oidcProviders {
 		if issuer != oidcProvider.Issuer {
 			continue
 		}
@@ -96,7 +96,16 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, 
 			return nil, fmt.Errorf("token validation failed: %v", err)
 		}
 
-		return token, nil
+		oidcId := &oidcIdentity{
+			provider: providerName,
+			token:    token,
+		}
+
+		if err := oidcId.parseClaims(); err != nil {
+			return nil, fmt.Errorf("failed to parse claims: %v", err)
+		}
+
+		return oidcId, nil
 	}
 
 	return nil, fmt.Errorf("no matching provider found for issuer: %s", issuer)
@@ -115,28 +124,15 @@ func NewOIDCAuthInterceptor(audience string, validator *OIDCCachingValidator) co
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
 			}
 
-			providerName := req.Header().Get("X-Provider")
-			tok, err := validator.ValidateToken(ctx, providerName, rawIDToken, audience)
+			oidcIdentity, err := validator.ValidateToken(ctx, rawIDToken, audience)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to validate token")
 				span.SetStatus(codes.Error, err.Error())
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
 			}
 
-			oidcIdentity := &oidcIdentity{
-				provider: providerName,
-				token:    tok,
-			}
-
-			err = oidcIdentity.parseClaims()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to parse claims")
-				span.SetStatus(codes.Error, err.Error())
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
-			}
-
 			log.Info().
-				Str("provider", providerName).
+				Str("provider", oidcIdentity.Provider()).
 				Str("subject", oidcIdentity.Subject()).
 				Str("issuer", oidcIdentity.Issuer()).
 				Str("owner", oidcIdentity.Owner()).
