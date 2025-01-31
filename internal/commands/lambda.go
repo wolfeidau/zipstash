@@ -96,7 +96,7 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		raw.New(raw.Fields(flds)),
 		zlog.New(zlog.Fields(flds)),
 	).Then(lambdaextras.GenericHandler(httpadapter.NewV2(
-		otelhttp.NewHandler(mux, "server", otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents)),
+		otelhttp.NewHandler(mux, "server", otelhttp.WithTracerProvider(tp), otelhttp.WithPublicEndpoint()),
 	).ProxyWithContext))
 
 	lambda.Start(ch)
