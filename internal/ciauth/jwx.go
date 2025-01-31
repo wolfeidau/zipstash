@@ -55,31 +55,60 @@ func (v *OIDCCachingValidator) registerJWKSEndpoints(ctx context.Context, oidcPr
 	return nil
 }
 
-func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, providerName, tokenStr, expectedAudience string) (jwt.Token, error) {
-	oidcProvider, ok := v.oidcProviders[providerName]
-	if !ok {
-		return nil, fmt.Errorf("unknown provider: %s", providerName)
-	}
-
-	set, err := v.c.CachedSet(oidcProvider.JWKSURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get JWK set: %v", err)
-	}
-
+func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, tokenStr, expectedAudience string) (OIDCIdentity, error) {
+	// parse the JWT with the expected audience
 	token, err := jwt.Parse(
 		[]byte(tokenStr),
-		jwt.WithKeySet(set),
-		jwt.WithValidate(true),
+		jwt.WithVerify(false),
 		jwt.WithAudience(expectedAudience),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("token validation failed: %v", err)
+		return nil, fmt.Errorf("failed to parse token: %v", err)
 	}
 
-	// Additional custom validations can be added here
-	log.Info().Any("token", token).Msg("token validated")
+	// get the issuer from the token
+	issuer, ok := token.Issuer()
+	if !ok {
+		return nil, fmt.Errorf("token has no issuer")
+	}
 
-	return token, nil
+	// get the JWK set for the issuer
+	for providerName, oidcProvider := range v.oidcProviders {
+		if issuer != oidcProvider.Issuer {
+			continue
+		}
+
+		// get the JWK set for the issuer
+		set, err := v.c.CachedSet(oidcProvider.JWKSURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get JWK set: %v", err)
+		}
+
+		// validate the token with the JWK set
+		token, err := jwt.Parse(
+			[]byte(tokenStr),
+			jwt.WithKeySet(set),
+			jwt.WithValidate(true),
+			jwt.WithIssuer(issuer),
+			jwt.WithAudience(expectedAudience),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("token validation failed: %v", err)
+		}
+
+		oidcId := &oidcIdentity{
+			provider: providerName,
+			token:    token,
+		}
+
+		if err := oidcId.parseClaims(); err != nil {
+			return nil, fmt.Errorf("failed to parse claims: %v", err)
+		}
+
+		return oidcId, nil
+	}
+
+	return nil, fmt.Errorf("no matching provider found for issuer: %s", issuer)
 }
 
 func NewOIDCAuthInterceptor(audience string, validator *OIDCCachingValidator) connect.UnaryInterceptorFunc {
@@ -95,28 +124,15 @@ func NewOIDCAuthInterceptor(audience string, validator *OIDCCachingValidator) co
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
 			}
 
-			providerName := req.Header().Get("X-Provider")
-			tok, err := validator.ValidateToken(ctx, providerName, rawIDToken, audience)
+			oidcIdentity, err := validator.ValidateToken(ctx, rawIDToken, audience)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to validate token")
 				span.SetStatus(codes.Error, err.Error())
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
 			}
 
-			oidcIdentity := &oidcIdentity{
-				provider: providerName,
-				token:    tok,
-			}
-
-			err = oidcIdentity.parseClaims()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to parse claims")
-				span.SetStatus(codes.Error, err.Error())
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
-			}
-
 			log.Info().
-				Str("provider", providerName).
+				Str("provider", oidcIdentity.Provider()).
 				Str("subject", oidcIdentity.Subject()).
 				Str("issuer", oidcIdentity.Issuer()).
 				Str("owner", oidcIdentity.Owner()).
