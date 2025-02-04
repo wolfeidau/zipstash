@@ -1,16 +1,16 @@
+env:
+  GOPATH: /root/go
+
 steps:
   - group: ':mag: QA'
     id: quality_assurance
     steps:
-    - key: go_build
-      command: |
-        go mod download
-        go build ./cmd/...
-      label: ':golang: mod build all the things'
+    - key: go_mod_download
+      commands:
+        - go mod download
+        - go build ./cmd/...
+      label: ':golang: mod download and build'
       plugins:
-        - docker-compose#v5.4.0:
-            run: app
-            config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
             key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
@@ -24,9 +24,6 @@ steps:
       label: ':golang: vet'
       command: go vet ./...
       plugins:
-        - docker-compose#v5.4.0:
-            run: app
-            config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
             key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
@@ -37,14 +34,11 @@ steps:
             repo: wolfeidau/zipstash
             clean: true
             skip-save: true
-      depends_on: go_build
+      depends_on: go_mod_download
     - key: test
       label: ':golang: test'
       command: go test -v -cover ./...
       plugins:
-        - docker-compose#v5.4.0:
-            run: app
-            config: .buildkite/docker-compose.yml
         - wolfeidau/zipstash#main:
             id: go
             key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
@@ -55,4 +49,4 @@ steps:
             repo: wolfeidau/zipstash
             clean: true
             skip-save: false
-      depends_on: go_build
+      depends_on: go_mod_download
