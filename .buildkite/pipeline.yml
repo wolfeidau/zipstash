@@ -13,7 +13,8 @@ steps:
       plugins:
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ id }}-{{ checksum 'go.mod' }}"
+            fallback-branch: main
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
@@ -26,7 +27,8 @@ steps:
       plugins:
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ id }}-{{ checksum 'go.mod' }}"
+            fallback-branch: main
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
@@ -41,7 +43,8 @@ steps:
       plugins:
         - wolfeidau/zipstash#main:
             id: go
-            key: "{{ runner.os }}-{{ id }}-{{ checksum 'go.mod' }}"
+            key: "{{ id }}-{{ checksum 'go.mod' }}"
+            fallback-branch: main
             paths: |
               ~/go/pkg/mod
               ~/.cache/go-build
