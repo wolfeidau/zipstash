@@ -21,6 +21,9 @@ type CacheRecord struct {
 	Sha256            string    `json:"sha256"`
 	Compression       string    `json:"compression"`
 	FileSize          int64     `json:"file_size"`
+	Architecture      string    `json:"architecture"`
+	OperatingSystem   string    `json:"operating_system"`
+	CpuCount          int32     `json:"cpu_count"`
 }
 
 type TenantRecord struct {

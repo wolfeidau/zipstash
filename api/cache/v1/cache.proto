@@ -76,6 +76,7 @@ message CreateEntryRequest {
   provider.v1.Provider provider_type = 1;
   CacheEntry cache_entry = 2;
   bool multipart_supported = 3;
+  Platform platform = 4;
 }
 
 // CreateEntryResponse is the response for creating a cache entry
@@ -103,6 +104,8 @@ message GetEntryRequest {
   string name = 3 [(buf.validate.field).string = {min_len: 1}];
   string branch = 4 [(buf.validate.field).string = {min_len: 1}];
   string owner = 5 [(buf.validate.field).string = {min_len: 1}];
+  string fallback_branch = 6;
+  Platform platform = 7;
 }
 
 // GetEntryResponse is the response for retrieving a cache entry
@@ -110,6 +113,7 @@ message GetEntryResponse {
   CacheEntry cache_entry = 1;
   repeated CacheDownloadInstruction download_instructions = 2;
   bool multipart = 3;
+  bool fallback = 4;
 }
 
 message CheckEntryRequest {
@@ -123,4 +127,10 @@ message CheckEntryRequest {
 message CheckEntryResponse {
   bool exists = 1;
   string sha256sum = 2;
+}
+
+message Platform {
+  string architecture = 1 [(buf.validate.field).string = {min_len: 1}];
+  string operating_system = 2 [(buf.validate.field).string = {min_len: 1}];
+  int32 cpu_count = 3;
 }

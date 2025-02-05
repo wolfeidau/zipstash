@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -105,6 +106,11 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 			Name:        c.Name,
 			Branch:      c.Branch,
 			Owner:       c.Owner,
+		},
+		Platform: &cachev1.Platform{
+			OperatingSystem: runtime.GOOS,
+			Architecture:    runtime.GOARCH,
+			CpuCount:        int32(runtime.NumCPU()),
 		},
 	}, token, c.TokenSource, globals.Version)
 
