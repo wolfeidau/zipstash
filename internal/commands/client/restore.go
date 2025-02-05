@@ -44,10 +44,21 @@ func (c *RestoreCmd) Run(ctx context.Context, globals *Globals) error {
 		attribute.String("token_source", c.TokenSource),
 	)
 
-	return c.restore(ctx, globals)
+	cacheHit, err := c.restore(ctx, globals)
+	if err != nil {
+		return fmt.Errorf("failed to restore cache: %w", err)
+	}
+
+	span.SetAttributes(
+		attribute.Bool("cache_hit", cacheHit),
+	)
+
+	fmt.Println(cacheHit)
+
+	return nil
 }
 
-func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
+func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) (bool, error) {
 	ctx, span := trace.Start(ctx, "RestoreCmd.restore")
 	defer span.End()
 
@@ -55,7 +66,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	token, err := tokens.GetToken(ctx, c.TokenSource, audience, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get token: %w", err)
+		return false, fmt.Errorf("failed to get token: %w", err)
 	}
 
 	req := newAuthenticatedProviderRequest(&cachev1.GetEntryRequest{
@@ -76,9 +87,9 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeNotFound {
 			log.Info().Msg("cache entry not found")
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("failed to get cache entry: %w", err)
+		return false, fmt.Errorf("failed to get cache entry: %w", err)
 	}
 
 	log.Info().
@@ -94,7 +105,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 		20,
 	).Download(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to download cache entry: %w", err)
+		return false, fmt.Errorf("failed to download cache entry: %w", err)
 	}
 
 	slices.SortFunc(downloads, func(a, b downloader.DownloadedFile) int {
@@ -110,7 +121,7 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	zipFile, zipFileLen, err := combineParts(ctx, downloads)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return false, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer zipFile.Close()
 
@@ -118,20 +129,20 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	paths, err := checkPath(c.Path)
 	if err != nil {
-		return fmt.Errorf("failed to check path: %w", err)
+		return false, fmt.Errorf("failed to check path: %w", err)
 	}
 
 	if c.Clean {
 		for _, path := range paths {
 			path, err := archive.ResolveHomeDir(path)
 			if err != nil {
-				return fmt.Errorf("failed to resolve home dir: %w", err)
+				return false, fmt.Errorf("failed to resolve home dir: %w", err)
 			}
 
 			log.Info().Str("path", path).Msg("cleaning path")
 			err = cleanPath(ctx, path)
 			if err != nil {
-				return fmt.Errorf("failed to clean path: %w", err)
+				return false, fmt.Errorf("failed to clean path: %w", err)
 			}
 		}
 	}
@@ -140,13 +151,13 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) error {
 
 	err = archive.ExtractFiles(ctx, zipFile, zipFileLen, paths)
 	if err != nil {
-		return fmt.Errorf("failed to restore files: %w", err)
+		return false, fmt.Errorf("failed to restore files: %w", err)
 	}
 
 	// cleanup zip file
 	defer os.Remove(zipFile.Name())
 
-	return nil
+	return true, nil
 }
 
 // pass in a list of paths and turn them into a zip file stream to enable extraction
