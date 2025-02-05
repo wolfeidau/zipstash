@@ -147,6 +147,9 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
 		Name:              name,
 		Branch:            branch,
+		Architecture:      createReq.Msg.Platform.Architecture,
+		OperatingSystem:   createReq.Msg.Platform.OperatingSystem,
+		CpuCount:          createReq.Msg.Platform.CpuCount,
 		Owner:             createReq.Msg.CacheEntry.Owner,
 		Provider:          fromProviderV1(createReq.Msg.ProviderType),
 		Sha256:            createReq.Msg.CacheEntry.Sha256Sum,
@@ -249,6 +252,8 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 		Str("key", getReq.Msg.Key).
 		Str("cacheKey", cacheKey).
 		Msg("cache entry get request")
+
+	// TODO: we should check if the cache entry exists under the fallback branch as well
 
 	// does the cache entry exist?
 	exists, record, err := zs.store.ExistsCache(ctx, cacheKey)
