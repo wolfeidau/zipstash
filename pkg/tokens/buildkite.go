@@ -26,7 +26,7 @@ func (b *buildkite) getIDToken(ctx context.Context, audience string) (string, er
 
 	span.SetAttributes(attribute.String("audience", audience))
 
-	result, err := runCommand(ctx, "", "buildkite-agent", "oidc", "request-token", "--audience", audience)
+	result, err := runCommand(ctx, "", "buildkite-agent", "oidc", "request-token", "--audience", audience, "--claim", "organization_id")
 	if err != nil {
 		return "", fmt.Errorf("failed to get OIDC token: %w", err)
 	}

@@ -46,6 +46,7 @@ type OIDCProvider struct {
 // BuildkiteClaims is the struct for the claims in the Buildkite OIDC token
 type BuildkiteClaims struct {
 	OrganizationSlug  string `json:"organization_slug"`
+	OrganizationID    string `json:"organization_id"`
 	PipelineSlug      string `json:"pipeline_slug"`
 	BuildBranch       string `json:"build_branch"`
 	BuildTag          string `json:"build_tag"`
