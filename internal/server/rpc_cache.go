@@ -55,7 +55,6 @@ func buildCacheKey(owner, provider, key string) string {
 }
 
 func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error) {
-
 	owner := checkReq.Msg.Owner
 
 	log.Info().
@@ -105,7 +104,6 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	name := createReq.Msg.CacheEntry.Name
 	branch := createReq.Msg.CacheEntry.Branch
 
-	// cacheKey := path.Join(name, branch, createReq.Msg.CacheEntry.Key)
 	cacheKey := buildCacheKey(owner, fromProviderV1(createReq.Msg.ProviderType), createReq.Msg.CacheEntry.Key)
 
 	// does the cache entry already exist?
@@ -196,7 +194,6 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.UpdateEntry cache entry does not exist"))
 	}
 
-	// cacheKey := path.Join(cacheRec.Name, cacheRec.Branch, cacheRec.ID)
 	cacheKey := buildCacheKey(cacheRec.Owner, cacheRec.Provider, cacheRec.ID)
 
 	log.Info().
@@ -317,6 +314,7 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	log.Info().
 		Str("Owner", owner).
 		Str("identity.Owner", identity.Owner()).
+		Any("claims", identity.Claims()).
 		Str("ProviderType", provider).
 		Msg("check the tenant exists")
 
