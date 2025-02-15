@@ -105,7 +105,7 @@ message GetEntryRequest {
   string branch = 4 [(buf.validate.field).string = {min_len: 1}];
   string owner = 5 [(buf.validate.field).string = {min_len: 1}];
   string fallback_branch = 6;
-  Platform platform = 7;
+  Platform platform = 7 [(buf.validate.field).required = true];
 }
 
 // GetEntryResponse is the response for retrieving a cache entry
