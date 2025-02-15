@@ -87,7 +87,7 @@ func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, 
 	return true, cacheRec, err
 }
 
-func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider, os, arch, branch string) (bool, CacheRecord, error) {
+func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider, os, arch, name, branch string) (bool, CacheRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.ExistsCacheByFallbackBranch")
 	defer span.End()
 
@@ -96,7 +96,8 @@ func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider
 		provider,
 		os,
 		arch,
-		branch,
+		name,
+		hashValue(branch),
 	}, "#")
 
 	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", created,
@@ -124,7 +125,8 @@ func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, life
 		value.Provider,
 		value.OperatingSystem,
 		value.Architecture,
-		value.Branch,
+		value.Name,
+		hashValue(value.Branch),
 		time.Now().UTC().Format(time.RFC3339),
 	}, "#")
 

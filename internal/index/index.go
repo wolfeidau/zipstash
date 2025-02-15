@@ -1,6 +1,8 @@
 package index
 
 import (
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
 	"slices"
 	"time"
@@ -52,4 +54,9 @@ type Identity struct {
 
 func TenantKey(provider, owner string) string {
 	return fmt.Sprintf("%s#%s", provider, owner)
+}
+
+func hashValue(v string) string {
+	hash := sha256.Sum256([]byte(v))
+	return base32.StdEncoding.EncodeToString(hash[:])
 }

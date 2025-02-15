@@ -35,7 +35,6 @@ steps:
             endpoint: $ENDPOINT
             repo: wolfeidau/zipstash
             clean: true
-            skip-save: true
       depends_on: go_mod_download
     - key: test
       label: ':golang: test'
@@ -51,5 +50,4 @@ steps:
             endpoint: $ENDPOINT
             repo: wolfeidau/zipstash
             clean: true
-            skip-save: false
       depends_on: go_mod_download

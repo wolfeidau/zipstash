@@ -293,9 +293,9 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 
 	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
-			Key:         getReq.Msg.Key,
-			Name:        getReq.Msg.Name,
-			Branch:      getReq.Msg.Branch,
+			Key:         cacheKey,
+			Name:        record.Name,
+			Branch:      record.Branch,
 			Compression: record.Compression,
 			Sha256Sum:   record.Sha256,
 			FileSize:    aws.ToInt64(res.ContentLength),
