@@ -101,8 +101,8 @@ func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider
 	}, "#")
 
 	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", created,
-		s.tenantStore.ReadWithLimit(1),
-		s.tenantStore.ReadWithIndex("idx_created", "id", "created"))
+		s.cacheStore.ReadWithLimit(1),
+		s.cacheStore.ReadWithIndex("idx_created", "id", "created"))
 	if err != nil {
 		span.RecordError(err)
 

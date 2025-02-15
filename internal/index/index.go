@@ -2,7 +2,7 @@ package index
 
 import (
 	"crypto/sha256"
-	"encoding/base32"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"time"
@@ -58,5 +58,5 @@ func TenantKey(provider, owner string) string {
 
 func hashValue(v string) string {
 	hash := sha256.Sum256([]byte(v))
-	return base32.StdEncoding.EncodeToString(hash[:])
+	return hex.EncodeToString(hash[:])
 }
