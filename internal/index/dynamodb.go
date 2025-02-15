@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/rs/zerolog/log"
 	"github.com/wolfeidau/dynastorev2"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -85,21 +87,67 @@ func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, 
 	return true, cacheRec, err
 }
 
+func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider, os, arch, name, branch string) (bool, CacheRecord, error) {
+	ctx, span := trace.Start(ctx, "Store.ExistsCacheByFallbackBranch")
+	defer span.End()
+
+	created := strings.Join([]string{
+		owner,
+		provider,
+		os,
+		arch,
+		name,
+		hashValue(branch),
+	}, "#")
+
+	span.SetAttributes(attribute.String("created", created))
+
+	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", created,
+		s.cacheStore.ReadWithLimit(1),
+		s.cacheStore.ReadWithReverseSortResults(true),
+		s.cacheStore.ReadWithIndex("idx_created", "id", "created"))
+	if err != nil {
+		span.RecordError(err)
+
+		return false, CacheRecord{}, fmt.Errorf("failed to list tenants: %w", err)
+	}
+
+	if len(res) == 0 {
+		return false, CacheRecord{}, nil
+	}
+
+	return true, res[0], nil
+}
+
 func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, lifetime time.Duration) error {
 	ctx, span := trace.Start(ctx, "Store.PutCache")
 	defer span.End()
+
+	created := strings.Join([]string{
+		value.Owner,
+		value.Provider,
+		value.OperatingSystem,
+		value.Architecture,
+		value.Name,
+		hashValue(value.Branch),
+		time.Now().UTC().Format(time.RFC3339),
+	}, "#")
+
+	span.SetAttributes(attribute.String("created", created))
 
 	_, err := s.cacheStore.Create(ctx, "cache", id, value,
 		s.cacheStore.WriteWithCreateConstraintDisabled(true),
 		s.cacheStore.WriteWithTTL(lifetime),
 		s.cacheStore.WriteWithExtraFields(map[string]any{
 			// bit of a hack as created is just updated without create constraint
-			"created": time.Now().UTC().Format(time.RFC3339),
+			"created": created,
 			"pk1":     "cache#owner",
 			"sk1":     TenantKey(value.Provider, value.Owner),
 		}),
 	)
 	if err != nil {
+		span.RecordError(err)
+
 		return fmt.Errorf("failed to put cache record: %w", err)
 	}
 
@@ -112,6 +160,8 @@ func (s *Store) DeleteCache(ctx context.Context, id string) error {
 
 	err := s.cacheStore.Delete(ctx, "cache", id)
 	if err != nil {
+		span.RecordError(err)
+
 		return fmt.Errorf("failed to delete cache record: %w", err)
 	}
 
@@ -124,6 +174,8 @@ func (s *Store) GetTenant(ctx context.Context, id string) (TenantRecord, error) 
 
 	_, tenantRec, err := s.tenantStore.Get(ctx, "tenant", id)
 	if err != nil {
+		span.RecordError(err)
+
 		if errors.Is(err, dynastorev2.ErrKeyNotExists) {
 			return TenantRecord{}, ErrNotFound
 		}
@@ -145,6 +197,8 @@ func (s *Store) PutTenant(ctx context.Context, id string, value TenantRecord) er
 		}),
 	)
 	if err != nil {
+		span.RecordError(err)
+
 		var oc *types.ConditionalCheckFailedException
 		if errors.As(err, &oc) {
 			return fmt.Errorf("tenant already exists: %w", ErrAlreadyExists)
@@ -163,6 +217,8 @@ func (s *Store) ExistsTenantByKey(ctx context.Context, key string) (bool, Tenant
 		s.tenantStore.ReadWithLimit(1),
 		s.tenantStore.ReadWithIndex("idx_global_1", "pk1", "sk1"))
 	if err != nil {
+		span.RecordError(err)
+
 		return false, TenantRecord{}, fmt.Errorf("failed to list tenants: %w", err)
 	}
 

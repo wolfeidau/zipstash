@@ -157,6 +157,11 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) (bool, error
 	// cleanup zip file
 	defer os.Remove(zipFile.Name())
 
+	// check if the cache entry is a fallback
+	if getEntryResp.Msg.Fallback {
+		return false, nil
+	}
+
 	return true, nil
 }
 
