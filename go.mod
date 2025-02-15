@@ -1,6 +1,6 @@
 module github.com/wolfeidau/zipstash
 
-go 1.23.4
+go 1.24.0
 
 require (
 	connectrpc.com/connect v1.18.1
@@ -26,7 +26,6 @@ require (
 	github.com/wolfeidau/lambda-go-extras/middleware/zerolog v1.5.1
 	github.com/wolfeidau/quickzip v1.0.1
 	github.com/wolfeidau/zipstash/api v0.0.0-20250116151229-77ee7e95daab
-	go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda v0.59.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.34.0
