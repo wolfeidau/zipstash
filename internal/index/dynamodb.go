@@ -100,6 +100,8 @@ func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider
 		hashValue(branch),
 	}, "#")
 
+	span.SetAttributes(attribute.String("created", created))
+
 	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", created,
 		s.cacheStore.ReadWithLimit(1),
 		s.cacheStore.ReadWithReverseSortResults(true),

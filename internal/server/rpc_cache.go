@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
 
 	v1 "github.com/wolfeidau/zipstash/api/gen/proto/go/cache/v1"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
@@ -242,29 +244,19 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 		return nil, err // already a connect error
 	}
 
-	// cacheKey := path.Join(getReq.Msg.Name, getReq.Msg.Branch, getReq.Msg.Key)
-	cacheKey := buildCacheKey(getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Key)
-
-	log.Info().
-		Str("key", getReq.Msg.Key).
-		Str("cacheKey", cacheKey).
-		Msg("cache entry get request")
-
-	// TODO: we should check if the cache entry exists under the fallback branch as well
-
 	// does the cache entry exist?
-	exists, record, err := zs.store.ExistsCache(ctx, cacheKey)
+	existsWithFallbackRes, err := zs.existsWithFallback(ctx, getReq)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
 	}
 
-	if !exists {
+	if !existsWithFallbackRes.exists {
 		log.Info().Msg("cache entry does not exist")
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.GetEntry cache entry does not exist"))
 	}
 
-	exists, res, err := zs.existsInS3(ctx, cacheKey)
+	exists, res, err := zs.existsInS3(ctx, existsWithFallbackRes.cacheKey)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
@@ -275,13 +267,14 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	}
 
 	log.Info().
-		Str("cacheKey", cacheKey).
-		Str("key", getReq.Msg.Key).
+		Str("cacheKey", existsWithFallbackRes.cacheKey).
+		Bool("exists", existsWithFallbackRes.exists).
+		Bool("fallback", existsWithFallbackRes.fallback).
 		Str("sha256sum", aws.ToString(res.ChecksumSHA256)).Msg("cache entry found")
 
 	downloadInstructs, err := zs.presigner.GenerateFileDownloadInstructions(
 		ctx,
-		cacheKey,
+		existsWithFallbackRes.cacheKey,
 		aws.ToInt64(res.ContentLength),
 	)
 	if err != nil {
@@ -291,9 +284,11 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 
 	// TODO: touch the s3 object to update the last modified time
 
+	record := existsWithFallbackRes.record
+
 	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
-			Key:         cacheKey,
+			Key:         existsWithFallbackRes.cacheKey,
 			Name:        record.Name,
 			Branch:      record.Branch,
 			Compression: record.Compression,
@@ -301,6 +296,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 			FileSize:    aws.ToInt64(res.ContentLength),
 		},
 		Multipart:            downloadInstructs.Multipart,
+		Fallback:             existsWithFallbackRes.fallback,
 		DownloadInstructions: fromInstructToDownloadV1(downloadInstructs.DownloadInstructions),
 	}), nil
 }
@@ -349,6 +345,56 @@ func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bo
 	}
 
 	return true, res, nil
+}
+
+type existsWithFallbackResult struct {
+	cacheKey string
+	exists   bool
+	fallback bool
+	record   index.CacheRecord
+}
+
+func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (existsWithFallbackResult, error) {
+	ctx, span := trace.Start(ctx, "Cache.existsWithFallback")
+	defer span.End()
+
+	cacheKey := buildCacheKey(getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Key)
+
+	log.Info().
+		Str("key", getReq.Msg.Key).
+		Str("cacheKey", cacheKey).
+		Msg("cache entry get request")
+
+	keyExists, record, err := zs.store.ExistsCache(ctx, cacheKey)
+	if err != nil {
+		return existsWithFallbackResult{}, fmt.Errorf("failed to check if cache entry exists: %w", err)
+	}
+
+	span.SetAttributes(attribute.Bool("keyExists", keyExists), attribute.String("cacheKey", cacheKey))
+
+	if keyExists {
+		return existsWithFallbackResult{exists: true, record: record, cacheKey: cacheKey}, nil
+	}
+
+	fallbackExists, record, err := zs.store.ExistsCacheByFallbackBranch(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Platform.OperatingSystem, getReq.Msg.Platform.Architecture, getReq.Msg.Name, getReq.Msg.FallbackBranch)
+	if err != nil {
+		return existsWithFallbackResult{}, fmt.Errorf("failed to check fallback cache entry exists: %w", err)
+	}
+
+	cacheKey = buildCacheKey(record.Owner, record.Provider, record.ID)
+
+	log.Info().
+		Str("key", getReq.Msg.Key).
+		Str("cacheKey", cacheKey).
+		Msg("cache entry get request with fallback")
+
+	span.SetAttributes(attribute.Bool("fallbackExists", fallbackExists), attribute.String("cacheKey", cacheKey))
+
+	if fallbackExists {
+		return existsWithFallbackResult{exists: true, record: record, cacheKey: cacheKey, fallback: true}, nil
+	}
+
+	return existsWithFallbackResult{}, nil
 }
 
 func fromUploadInstructions(uploadInstructs []CacheURLInstruction) []*v1.CacheUploadInstruction {
