@@ -165,9 +165,20 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		Issuer:  identity.Issuer(),
 	}
 
+	// TODO: we should enable customization of this field to allow for removal of fields to change behavior
+	created := strings.Join([]string{
+		createReq.Msg.CacheEntry.Owner,
+		fromProviderV1(createReq.Msg.ProviderType),
+		createReq.Msg.Platform.OperatingSystem,
+		createReq.Msg.Platform.Architecture,
+		name,
+		hashValue(branch),
+		time.Now().UTC().Format(time.RFC3339),
+	}, "#")
+
 	// create/update the cache entry in the cache index
 	// TODO: should we store this record after generating the upload instructions? So we can put the upload ID in the record and validate the upload ID when the upload is complete?
-	err = zs.store.PutCache(ctx, uploadID, cacheRec, cacheRecordInflightTTL)
+	err = zs.store.PutCache(ctx, uploadID, created, cacheRec, cacheRecordInflightTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
@@ -223,8 +234,19 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	// update the cache entry in the cache index
 	cacheRec.UpdatedAt = time.Now()
 
+	// TODO: we should enable customization of this field to allow for removal of fields to change behavior
+	created := strings.Join([]string{
+		cacheRec.Owner,
+		cacheRec.Provider,
+		cacheRec.OperatingSystem,
+		cacheRec.Architecture,
+		cacheRec.Name,
+		hashValue(cacheRec.Branch),
+		time.Now().UTC().Format(time.RFC3339),
+	}, "#")
+
 	// move the inflight cache entry to the cache index
-	err = zs.store.PutCache(ctx, cacheKey, cacheRec, cacheRecordTTL)
+	err = zs.store.PutCache(ctx, cacheKey, created, cacheRec, cacheRecordTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
@@ -349,9 +371,9 @@ func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bo
 
 type existsWithFallbackResult struct {
 	cacheKey string
+	record   index.CacheRecord
 	exists   bool
 	fallback bool
-	record   index.CacheRecord
 }
 
 func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (existsWithFallbackResult, error) {
@@ -376,7 +398,17 @@ func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *c
 		return existsWithFallbackResult{exists: true, record: record, cacheKey: cacheKey}, nil
 	}
 
-	fallbackExists, record, err := zs.store.ExistsCacheByFallbackBranch(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Platform.OperatingSystem, getReq.Msg.Platform.Architecture, getReq.Msg.Name, getReq.Msg.FallbackBranch)
+	// TODO: we should enable customization of this field to allow for removal of fields to change behavior
+	createdPrefix := strings.Join([]string{
+		getReq.Msg.Owner,
+		fromProviderV1(getReq.Msg.ProviderType),
+		getReq.Msg.Platform.OperatingSystem,
+		getReq.Msg.Platform.Architecture,
+		getReq.Msg.Name,
+		hashValue(getReq.Msg.FallbackBranch),
+	}, "#")
+
+	fallbackExists, record, err := zs.store.ExistsCacheByFallbackBranch(ctx, createdPrefix)
 	if err != nil {
 		return existsWithFallbackResult{}, fmt.Errorf("failed to check fallback cache entry exists: %w", err)
 	}

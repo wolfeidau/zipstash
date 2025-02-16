@@ -1,8 +1,6 @@
 package index
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"time"
@@ -14,17 +12,17 @@ type CacheRecord struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 	MultipartUploadId *string   `json:"multipart_upload_id"`
 	Identity          *Identity `json:"identity"`
-	ID                string    `json:"id"`
+	Owner             string    `json:"owner"`
 	Paths             string    `json:"path"`
 	Provider          string    `json:"provider"`
-	Owner             string    `json:"owner"`
+	ID                string    `json:"id"`
 	Name              string    `json:"name"`
 	Branch            string    `json:"branch"`
 	Sha256            string    `json:"sha256"`
 	Compression       string    `json:"compression"`
-	FileSize          int64     `json:"file_size"`
 	Architecture      string    `json:"architecture"`
 	OperatingSystem   string    `json:"operating_system"`
+	FileSize          int64     `json:"file_size"`
 	CpuCount          int32     `json:"cpu_count"`
 }
 
@@ -54,9 +52,4 @@ type Identity struct {
 
 func TenantKey(provider, owner string) string {
 	return fmt.Sprintf("%s#%s", provider, owner)
-}
-
-func hashValue(v string) string {
-	hash := sha256.Sum256([]byte(v))
-	return hex.EncodeToString(hash[:])
 }
