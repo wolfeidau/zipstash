@@ -1,8 +1,7 @@
 package server
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"net/url"
 	"path"
 
 	providerv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provider/v1"
@@ -22,9 +21,11 @@ func fromProviderV1(prov providerv1.Provider) string {
 	}
 }
 
-func hashValue(v string) string {
-	hash := sha256.Sum256([]byte(v))
-	return hex.EncodeToString(hash[:])
+// escapeValue escapes a string for use in a delimited index value.
+// Using escape as it means the value is still readable but the value is safe
+// to use in a delimited index.
+func escapeValue(v string) string {
+	return url.QueryEscape(v)
 }
 
 func buildCacheKey(owner, provider, os, arch, key string) string {
