@@ -64,6 +64,11 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 		Name:         c.Name,
 		Owner:        c.Owner,
 		ProviderType: convertProviderTypeV1(c.TokenSource),
+		Platform: &cachev1.Platform{
+			OperatingSystem: runtime.GOOS,
+			Architecture:    runtime.GOARCH,
+			CpuCount:        int32(runtime.NumCPU()),
+		},
 	}, token, c.TokenSource, globals.Version)
 
 	checkRes, err := cl.CheckEntry(ctx, checkReq)

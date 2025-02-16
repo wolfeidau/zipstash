@@ -15,7 +15,7 @@ type CacheRecord struct {
 	Owner             string    `json:"owner"`
 	Paths             string    `json:"path"`
 	Provider          string    `json:"provider"`
-	ID                string    `json:"id"`
+	Key               string    `json:"id"`
 	Name              string    `json:"name"`
 	Branch            string    `json:"branch"`
 	Sha256            string    `json:"sha256"`
