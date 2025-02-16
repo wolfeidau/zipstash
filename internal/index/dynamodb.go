@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -87,22 +86,13 @@ func (s *Store) ExistsCache(ctx context.Context, id string) (bool, CacheRecord, 
 	return true, cacheRec, err
 }
 
-func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider, os, arch, name, branch string) (bool, CacheRecord, error) {
+func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, createdPrefix string) (bool, CacheRecord, error) {
 	ctx, span := trace.Start(ctx, "Store.ExistsCacheByFallbackBranch")
 	defer span.End()
 
-	created := strings.Join([]string{
-		owner,
-		provider,
-		os,
-		arch,
-		name,
-		hashValue(branch),
-	}, "#")
+	span.SetAttributes(attribute.String("createdPrefix", createdPrefix))
 
-	span.SetAttributes(attribute.String("created", created))
-
-	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", created,
+	_, res, err := s.cacheStore.ListBySortKeyPrefix(ctx, "cache", createdPrefix,
 		s.cacheStore.ReadWithLimit(1),
 		s.cacheStore.ReadWithReverseSortResults(true),
 		s.cacheStore.ReadWithIndex("idx_created", "id", "created"))
@@ -119,19 +109,9 @@ func (s *Store) ExistsCacheByFallbackBranch(ctx context.Context, owner, provider
 	return true, res[0], nil
 }
 
-func (s *Store) PutCache(ctx context.Context, id string, value CacheRecord, lifetime time.Duration) error {
+func (s *Store) PutCache(ctx context.Context, id, created string, value CacheRecord, lifetime time.Duration) error {
 	ctx, span := trace.Start(ctx, "Store.PutCache")
 	defer span.End()
-
-	created := strings.Join([]string{
-		value.Owner,
-		value.Provider,
-		value.OperatingSystem,
-		value.Architecture,
-		value.Name,
-		hashValue(value.Branch),
-		time.Now().UTC().Format(time.RFC3339),
-	}, "#")
 
 	span.SetAttributes(attribute.String("created", created))
 
