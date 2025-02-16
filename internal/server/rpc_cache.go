@@ -180,7 +180,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		createReq.Msg.Platform.OperatingSystem,
 		createReq.Msg.Platform.Architecture,
 		name,
-		hashValue(branch),
+		escapeValue(branch),
 		time.Now().UTC().Format(time.RFC3339),
 	}, "#")
 
@@ -250,7 +250,7 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		cacheRec.OperatingSystem,
 		cacheRec.Architecture,
 		cacheRec.Name,
-		hashValue(cacheRec.Branch),
+		escapeValue(cacheRec.Branch),
 		time.Now().UTC().Format(time.RFC3339),
 	}, "#")
 
@@ -425,7 +425,8 @@ func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *c
 		getReq.Msg.Platform.OperatingSystem,
 		getReq.Msg.Platform.Architecture,
 		getReq.Msg.Name,
-		hashValue(getReq.Msg.FallbackBranch),
+		escapeValue(getReq.Msg.FallbackBranch),
+		"", // include empty string to ensure the string ends in a #
 	}, "#")
 
 	fallbackExists, record, err := zs.store.ExistsCacheByFallbackBranch(ctx, createdPrefix)
