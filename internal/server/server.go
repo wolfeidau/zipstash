@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"path"
 
 	providerv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/provider/v1"
 	"github.com/wolfeidau/zipstash/internal/ciauth"
@@ -24,4 +25,8 @@ func fromProviderV1(prov providerv1.Provider) string {
 func hashValue(v string) string {
 	hash := sha256.Sum256([]byte(v))
 	return hex.EncodeToString(hash[:])
+}
+
+func buildCacheKey(owner, provider, os, arch, key string) string {
+	return path.Join(owner, provider, os, arch, key)
 }

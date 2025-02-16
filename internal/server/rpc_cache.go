@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 	"time"
@@ -52,11 +51,11 @@ func NewCacheServiceHandler(ctx context.Context, cfg CacheConfig, store *index.S
 	}
 }
 
-func buildCacheKey(owner, provider, key string) string {
-	return path.Join(owner, provider, key)
-}
-
+// CheckEntry checks if a cache entry exists for the given key.
 func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect.Request[v1.CheckEntryRequest]) (*connect.Response[v1.CheckEntryResponse], error) {
+	ctx, span := trace.Start(ctx, "Cache.CheckEntry")
+	defer span.End()
+
 	owner := checkReq.Msg.Owner
 
 	log.Info().
@@ -70,14 +69,16 @@ func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect
 		return nil, err // already a connect error
 	}
 
-	cacheKey := buildCacheKey(owner, fromProviderV1(checkReq.Msg.ProviderType), checkReq.Msg.Key)
+	cacheID := buildCacheKey(owner, fromProviderV1(checkReq.Msg.ProviderType), checkReq.Msg.Platform.OperatingSystem, checkReq.Msg.Platform.Architecture, checkReq.Msg.Key)
 
 	// does the cache entry already exist?
-	exists, cacheRec, err := zs.store.ExistsCache(ctx, cacheKey)
+	exists, cacheRec, err := zs.store.ExistsCache(ctx, cacheID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CheckEntry internal error"))
 	}
+
+	span.SetAttributes(attribute.String("cache_id", cacheID), attribute.Bool("exists", exists))
 
 	return connect.NewResponse(&v1.CheckEntryResponse{
 		Exists:    exists,
@@ -85,9 +86,16 @@ func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect
 	}), nil
 }
 
+// CreateEntry creates a new cache entry, this is the first step in the cache entry creation process.
 func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *connect.Request[v1.CreateEntryRequest]) (*connect.Response[v1.CreateEntryResponse], error) {
 	ctx, span := trace.Start(ctx, "Cache.CreateEntry")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("key", createReq.Msg.CacheEntry.Key),
+		attribute.String("owner", createReq.Msg.CacheEntry.Owner),
+		attribute.String("provider", fromProviderV1(createReq.Msg.ProviderType)),
+	)
 
 	owner := createReq.Msg.CacheEntry.Owner
 
@@ -106,10 +114,10 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	name := createReq.Msg.CacheEntry.Name
 	branch := createReq.Msg.CacheEntry.Branch
 
-	cacheKey := buildCacheKey(owner, fromProviderV1(createReq.Msg.ProviderType), createReq.Msg.CacheEntry.Key)
+	cacheID := buildCacheKey(owner, fromProviderV1(createReq.Msg.ProviderType), createReq.Msg.Platform.OperatingSystem, createReq.Msg.Platform.Architecture, createReq.Msg.CacheEntry.Key)
 
 	// does the cache entry already exist?
-	exists, _, err := zs.store.ExistsCache(ctx, cacheKey)
+	exists, _, err := zs.store.ExistsCache(ctx, cacheID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if cache entry exists")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.CreateEntry internal error"))
@@ -132,7 +140,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 
 	uploadInstructs, err := zs.presigner.GenerateFileUploadInstructions(
 		ctx,
-		cacheKey,
+		cacheID,
 		createReq.Msg.CacheEntry.Sha256Sum,
 		createReq.Msg.CacheEntry.Compression,
 		createReq.Msg.CacheEntry.FileSize,
@@ -143,7 +151,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	}
 
 	cacheRec := index.CacheRecord{
-		ID:                createReq.Msg.CacheEntry.Key,
+		Key:               createReq.Msg.CacheEntry.Key,
 		Paths:             strings.Join(createReq.Msg.CacheEntry.Paths, "\n"),
 		Name:              name,
 		Branch:            branch,
@@ -191,6 +199,7 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	}), nil
 }
 
+// UpdateEntry updates an existing cache entry, this is the second step in the cache entry creation process and is called after the upload is complete.
 func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.UpdateEntryResponse], error) {
 	ctx, span := trace.Start(ctx, "Cache.UpdateEntry")
 	defer span.End()
@@ -207,19 +216,19 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.UpdateEntry cache entry does not exist"))
 	}
 
-	cacheKey := buildCacheKey(cacheRec.Owner, cacheRec.Provider, cacheRec.ID)
+	cacheID := buildCacheKey(cacheRec.Owner, cacheRec.Provider, cacheRec.OperatingSystem, cacheRec.Architecture, cacheRec.Key)
 
 	log.Info().
 		Str("Id", updateReq.Msg.Id).
-		Str("Key", cacheRec.ID).
-		Str("cacheKey", cacheKey).
+		Str("Key", cacheRec.Key).
+		Str("cacheID", cacheID).
 		Msg("cache entry update request")
 
 	// complete the multipart upload if it exists and the upload ID matches
 	if cacheRec.MultipartUploadId != nil {
 		_, err := zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(zs.cfg.CacheBucket),
-			Key:      aws.String(cacheKey),
+			Key:      aws.String(cacheID),
 			UploadId: cacheRec.MultipartUploadId,
 			MultipartUpload: &types.CompletedMultipartUpload{
 				Parts: fromCachePartETagV1(updateReq.Msg.MultipartEtags),
@@ -246,7 +255,7 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	}, "#")
 
 	// move the inflight cache entry to the cache index
-	err = zs.store.PutCache(ctx, cacheKey, created, cacheRec, cacheRecordTTL)
+	err = zs.store.PutCache(ctx, cacheID, created, cacheRec, cacheRecordTTL)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.UpdateEntry internal error"))
@@ -257,9 +266,17 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 	}), nil
 }
 
+// GetEntry returns a cache entry by ID and is used to download a cache entry.
 func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (*connect.Response[v1.GetEntryResponse], error) {
 	ctx, span := trace.Start(ctx, "Cache.GetEntry")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("key", getReq.Msg.Key),
+		attribute.String("owner", getReq.Msg.Owner),
+		attribute.String("provider", fromProviderV1(getReq.Msg.ProviderType)),
+	)
+
 	// validate the owner
 	_, err := zs.validateOwner(ctx, getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType))
 	if err != nil {
@@ -278,7 +295,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("cache.v1.CacheService.GetEntry cache entry does not exist"))
 	}
 
-	exists, res, err := zs.existsInS3(ctx, existsWithFallbackRes.cacheKey)
+	exists, res, err := zs.existsInS3(ctx, existsWithFallbackRes.cacheID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get cache entry")
 		return nil, connect.NewError(connect.CodeInternal, errors.New("cache.v1.CacheService.GetEntry internal error"))
@@ -289,14 +306,14 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	}
 
 	log.Info().
-		Str("cacheKey", existsWithFallbackRes.cacheKey).
+		Str("cacheID", existsWithFallbackRes.cacheID).
 		Bool("exists", existsWithFallbackRes.exists).
 		Bool("fallback", existsWithFallbackRes.fallback).
 		Str("sha256sum", aws.ToString(res.ChecksumSHA256)).Msg("cache entry found")
 
 	downloadInstructs, err := zs.presigner.GenerateFileDownloadInstructions(
 		ctx,
-		existsWithFallbackRes.cacheKey,
+		existsWithFallbackRes.cacheID,
 		aws.ToInt64(res.ContentLength),
 	)
 	if err != nil {
@@ -310,7 +327,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 
 	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
-			Key:         existsWithFallbackRes.cacheKey,
+			Key:         existsWithFallbackRes.cacheID,
 			Name:        record.Name,
 			Branch:      record.Branch,
 			Compression: record.Compression,
@@ -323,6 +340,7 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 	}), nil
 }
 
+// validateOwner validates the owner of the cache entry using the oidc identity. The owner needs to exist in the tenant index.
 func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provider string) (index.TenantRecord, error) {
 	ctx, span := trace.Start(ctx, "Cache.validateOwner")
 	defer span.End()
@@ -349,6 +367,7 @@ func (zs *CacheServiceHandler) validateOwner(ctx context.Context, owner, provide
 	return rec, nil
 }
 
+// existsInS3 checks if the cache entry data exists in S3.
 func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bool, *s3.HeadObjectOutput, error) {
 	ctx, span := trace.Start(ctx, "Cache.existsInS3")
 	defer span.End()
@@ -370,32 +389,33 @@ func (zs *CacheServiceHandler) existsInS3(ctx context.Context, s3key string) (bo
 }
 
 type existsWithFallbackResult struct {
-	cacheKey string
+	cacheID  string
 	record   index.CacheRecord
 	exists   bool
 	fallback bool
 }
 
+// existsWithFallback checks if the cache entry exists in the cache index. If it does not exist, it uses the fallback branch to check if the cache entry using a prefix search of the cache created
 func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *connect.Request[v1.GetEntryRequest]) (existsWithFallbackResult, error) {
 	ctx, span := trace.Start(ctx, "Cache.existsWithFallback")
 	defer span.End()
 
-	cacheKey := buildCacheKey(getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Key)
+	cacheID := buildCacheKey(getReq.Msg.Owner, fromProviderV1(getReq.Msg.ProviderType), getReq.Msg.Platform.OperatingSystem, getReq.Msg.Platform.Architecture, getReq.Msg.Key)
 
 	log.Info().
 		Str("key", getReq.Msg.Key).
-		Str("cacheKey", cacheKey).
+		Str("cacheID", cacheID).
 		Msg("cache entry get request")
 
-	keyExists, record, err := zs.store.ExistsCache(ctx, cacheKey)
+	keyExists, record, err := zs.store.ExistsCache(ctx, cacheID)
 	if err != nil {
 		return existsWithFallbackResult{}, fmt.Errorf("failed to check if cache entry exists: %w", err)
 	}
 
-	span.SetAttributes(attribute.Bool("keyExists", keyExists), attribute.String("cacheKey", cacheKey))
+	span.SetAttributes(attribute.Bool("keyExists", keyExists), attribute.String("cacheKey", cacheID))
 
 	if keyExists {
-		return existsWithFallbackResult{exists: true, record: record, cacheKey: cacheKey}, nil
+		return existsWithFallbackResult{exists: true, record: record, cacheID: cacheID}, nil
 	}
 
 	// TODO: we should enable customization of this field to allow for removal of fields to change behavior
@@ -413,17 +433,17 @@ func (zs *CacheServiceHandler) existsWithFallback(ctx context.Context, getReq *c
 		return existsWithFallbackResult{}, fmt.Errorf("failed to check fallback cache entry exists: %w", err)
 	}
 
-	cacheKey = buildCacheKey(record.Owner, record.Provider, record.ID)
+	cacheID = buildCacheKey(record.Owner, record.Provider, record.OperatingSystem, record.Architecture, record.Key)
 
 	log.Info().
 		Str("key", getReq.Msg.Key).
-		Str("cacheKey", cacheKey).
+		Str("cacheID", cacheID).
 		Msg("cache entry get request with fallback")
 
-	span.SetAttributes(attribute.Bool("fallbackExists", fallbackExists), attribute.String("cacheKey", cacheKey))
+	span.SetAttributes(attribute.Bool("fallbackExists", fallbackExists), attribute.String("cacheKey", cacheID))
 
 	if fallbackExists {
-		return existsWithFallbackResult{exists: true, record: record, cacheKey: cacheKey, fallback: true}, nil
+		return existsWithFallbackResult{exists: true, record: record, cacheID: cacheID, fallback: true}, nil
 	}
 
 	return existsWithFallbackResult{}, nil
