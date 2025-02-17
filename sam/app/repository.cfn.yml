@@ -16,6 +16,10 @@ Parameters:
     Type: String
     Default: "main"
 
+  Component:
+    Type: String
+    Description: The component of the application, e.g., api, web, worker.
+
 Outputs:
   RepositoryArn:
     Description: "Repository ARN"
@@ -31,7 +35,7 @@ Resources:
   Repository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub "${AppName}_${Stage}_${Branch}"
+      RepositoryName: !Sub "${AppName}_${Stage}_${Branch}_${Component}"
       ImageTagMutability: IMMUTABLE
       LifecyclePolicy:
         LifecyclePolicyText: !Sub |
@@ -41,7 +45,7 @@ Resources:
                 "rulePriority": 1,
                 "selection": {
                   "tagStatus": "tagged",
-                  "tagPrefixList": ["${Stage}_"],
+                  "tagPrefixList": ["${Branch}_"],
                   "countType": "imageCountMoreThan",
                   "countNumber": 2
                 },
@@ -66,7 +70,7 @@ Resources:
   RepositoryArnParam:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_arn"
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/${Component}/repository_arn"
       Type: "String"
       Value: !GetAtt Repository.Arn
       Description: "ECR Repository ARN"
@@ -74,7 +78,7 @@ Resources:
   RepositoryUriParam:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_uri"
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/${Component}/repository_uri"
       Type: "String"
       Value: !GetAtt Repository.RepositoryUri
       Description: "ECR Repository URI"
@@ -82,7 +86,7 @@ Resources:
   RepositoryHostnameParam:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/repository_hostname"
+      Name: !Sub "/config/${Stage}/${Branch}/${AppName}/${Component}/repository_hostname"
       Type: "String"
       Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
       Description: "ECR Repository Hostname"
