@@ -1,53 +1,37 @@
 env:
   GOPATH: /root/go
 
+common:
+  - zipstash_plugin: &zipstash
+      wolfeidau/zipstash#main:
+            id: go
+            key: "{{ id }}-{{ checksum 'go.mod' }}"
+            fallback-branch: main
+            paths: |
+              ~/go/pkg/mod
+              ~/.cache/go-build
+            endpoint: $ENDPOINT
+            repo: wolfeidau/zipstash
+            clean: true
+
 steps:
   - group: ':mag: QA'
     id: quality_assurance
     steps:
     - key: go_mod_download
-      commands:
-        - go mod download
-        - go build ./cmd/...
+      command: .buildkite/scripts/build.sh
       label: ':golang: mod download and build'
       plugins:
-        - wolfeidau/zipstash#main:
-            id: go
-            key: "{{ id }}-{{ checksum 'go.mod' }}"
-            fallback-branch: main
-            paths: |
-              ~/go/pkg/mod
-              ~/.cache/go-build
-            endpoint: $ENDPOINT
-            repo: wolfeidau/zipstash
-            clean: true
+        - *zipstash
     - key: lint
-      label: ':golang: vet'
-      command: go vet ./...
+      label: ':golang: ci lint'
+      command: golangci-lint run ./...
       plugins:
-        - wolfeidau/zipstash#main:
-            id: go
-            key: "{{ id }}-{{ checksum 'go.mod' }}"
-            fallback-branch: main
-            paths: |
-              ~/go/pkg/mod
-              ~/.cache/go-build
-            endpoint: $ENDPOINT
-            repo: wolfeidau/zipstash
-            clean: true
+        - *zipstash
       depends_on: go_mod_download
     - key: test
       label: ':golang: test'
       command: go test -v -cover ./...
       plugins:
-        - wolfeidau/zipstash#main:
-            id: go
-            key: "{{ id }}-{{ checksum 'go.mod' }}"
-            fallback-branch: main
-            paths: |
-              ~/go/pkg/mod
-              ~/.cache/go-build
-            endpoint: $ENDPOINT
-            repo: wolfeidau/zipstash
-            clean: true
+        - *zipstash
       depends_on: go_mod_download
