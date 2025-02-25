@@ -181,8 +181,8 @@ func getRawPublicKey(t *testing.T, jwkey jwk.Key) []byte {
 
 func buildTestEndpoints(url string) map[string]OIDCProvider {
 	return map[string]OIDCProvider{
-		"buildkite": {
-			Issuer:  url,
+		url: {
+			Name:    "buildkite",
 			JWKSURL: fmt.Sprintf("%s/.well-known/keys", url),
 		},
 	}

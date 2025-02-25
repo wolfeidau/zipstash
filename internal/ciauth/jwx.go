@@ -59,53 +59,49 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, tokenStr, expe
 	}
 
 	// get the issuer from the token
-	issuer, ok := token.Issuer()
+	tokenIssuer, ok := token.Issuer()
 	if !ok {
 		return nil, fmt.Errorf("token has no issuer")
 	}
 
-	// get the JWK set for the issuer
-	for providerName, oidcProvider := range v.oidcProviders {
-		if issuer != oidcProvider.Issuer {
-			continue
-		}
-
-		// register the JWK endpoints for the provider
-		if err := v.registerJWKSEndpoints(ctx, oidcProvider); err != nil {
-			return nil, fmt.Errorf("failed to register JWK endpoints: %v", err)
-		}
-
-		// get the JWK set for the issuer
-		set, err := v.c.CachedSet(oidcProvider.JWKSURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get JWK set: %v", err)
-		}
-
-		// validate the token with the JWK set
-		token, err := jwt.Parse(
-			[]byte(tokenStr),
-			jwt.WithKeySet(set),
-			jwt.WithValidate(true),
-			jwt.WithIssuer(issuer),
-			jwt.WithAudience(expectedAudience),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("token validation failed: %v", err)
-		}
-
-		oidcId := &oidcIdentity{
-			provider: providerName,
-			token:    token,
-		}
-
-		if err := oidcId.parseClaims(); err != nil {
-			return nil, fmt.Errorf("failed to parse claims: %v", err)
-		}
-
-		return oidcId, nil
+	oidcProvider, ok := v.oidcProviders[tokenIssuer]
+	if !ok {
+		return nil, fmt.Errorf("unknown issuer: %v", tokenIssuer)
 	}
 
-	return nil, fmt.Errorf("no matching provider found for issuer: %s", issuer)
+	// register the JWK endpoints for the provider
+	if err := v.registerJWKSEndpoints(ctx, oidcProvider); err != nil {
+		return nil, fmt.Errorf("failed to register JWK endpoints: %v", err)
+	}
+
+	// get the JWK set for the issuer
+	set, err := v.c.CachedSet(oidcProvider.JWKSURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get JWK set: %v", err)
+	}
+
+	// validate the token with the JWK set
+	token, err = jwt.Parse(
+		[]byte(tokenStr),
+		jwt.WithKeySet(set),
+		jwt.WithValidate(true),
+		jwt.WithIssuer(tokenIssuer),
+		jwt.WithAudience(expectedAudience),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("token validation failed: %v", err)
+	}
+
+	oidcId := &oidcIdentity{
+		provider: oidcProvider.Name,
+		token:    token,
+	}
+
+	if err := oidcId.parseClaims(); err != nil {
+		return nil, fmt.Errorf("failed to parse claims: %v", err)
+	}
+
+	return oidcId, nil
 }
 
 type OIDCIdentity interface {

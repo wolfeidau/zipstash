@@ -3,6 +3,9 @@ RUN apk add --no-cache git make
 
 ARG APP_VERSION
 
+VOLUME /go
+VOLUME /root/.cache/go-build
+
 COPY . /src/zipstash
 WORKDIR /src/zipstash
 RUN go mod download
