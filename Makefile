@@ -27,7 +27,8 @@ docker-login:
 .PHONY: docker-api-build
 docker-api-build:
 	@echo "--- docker build"
-	@docker build --progress plain --build-arg APP_VERSION=${GIT_HASH} -t $(APPNAME):$(BRANCH)_${GIT_HASH} -f Dockerfile.server .
+	@docker build --progress plain \
+		--build-arg APP_VERSION=${GIT_HASH} -t $(APPNAME):$(BRANCH)_${GIT_HASH} -f Dockerfile.server .
 
 .PHONY: docker-api-push
 docker-api-push:

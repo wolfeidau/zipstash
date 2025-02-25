@@ -64,15 +64,14 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 		ddbClientFunc = func() *dynamodb.Client {
 			return dynamodb.NewFromConfig(awscfg)
 		}
-
-		oidcValidator, err := ciauth.NewOIDCValidator(ctx, ciauth.DefaultOIDCProviders)
-		if err != nil {
-			return fmt.Errorf("failed to create OIDC validator: %w", err)
-		}
-
-		// Add OIDC interceptor
-		interceptors = append(interceptors, ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator))
 	}
+
+	oidcValidator, err := ciauth.NewOIDCValidator(ctx, ciauth.DefaultOIDCProviders)
+	if err != nil {
+		return fmt.Errorf("failed to create OIDC validator: %w", err)
+	}
+
+	authMiddleware := ciauth.NewOIDCAuthMiddleware("zipstash.wolfe.id.au", oidcValidator)
 
 	store := index.MustNewStore(ctx, index.StoreConfig{
 		CacheIndexTable:   s.CacheIndexTable,
@@ -113,6 +112,6 @@ func (s *RPCServerCmd) Run(ctx context.Context, globals *Globals) error {
 	return http.ListenAndServe(
 		s.Listen,
 		// Use h2c so we can serve HTTP/2 without TLS.
-		h2c.NewHandler(mux, &http2.Server{}),
+		h2c.NewHandler(authMiddleware(mux), &http2.Server{}),
 	)
 }

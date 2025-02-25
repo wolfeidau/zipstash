@@ -1,7 +1,6 @@
 package ciauth
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,35 +12,6 @@ const (
 	GitHubActions = "github_actions"
 	GitLab        = "gitlab"
 )
-
-var (
-	ErrInvalidProvider   = errors.New("invalid provider")
-	DefaultOIDCProviders = map[string]OIDCProvider{
-		GitHubActions: {
-			Issuer:  "https://token.actions.githubusercontent.com",
-			JWKSURL: "https://token.actions.githubusercontent.com/.well-known/jwks",
-		},
-		GitLab: {
-			Issuer:  "https://gitlab.com",
-			JWKSURL: "https://gitlab.com/oauth/discovery/keys",
-		},
-		Buildkite: {
-			Issuer:  "https://agent.buildkite.com",
-			JWKSURL: "https://agent.buildkite.com/.well-known/jwks",
-		},
-	}
-
-	DefaultProviderNames = []string{
-		GitHubActions,
-		GitLab,
-		Buildkite,
-	}
-)
-
-type OIDCProvider struct {
-	Issuer  string
-	JWKSURL string
-}
 
 // BuildkiteClaims is the struct for the claims in the Buildkite OIDC token
 type BuildkiteClaims struct {
