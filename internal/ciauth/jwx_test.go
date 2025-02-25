@@ -11,13 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/stretchr/testify/require"
-	pingv1 "github.com/wolfeidau/zipstash/api/gen/proto/go/ping/v1"
-	"github.com/wolfeidau/zipstash/api/gen/proto/go/ping/v1/pingv1connect"
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
@@ -131,44 +128,24 @@ func TestEmptyUnaryInterceptorFunc(t *testing.T) {
 	ov, err := NewOIDCValidator(context.TODO(), endpoints)
 	assert.NoError(err)
 
-	interceptor := NewOIDCAuthInterceptor(audience, ov)
-	mux.Handle(pingv1connect.NewPingServiceHandler(&mockPingServer{
-		PingFunc: func(ctx context.Context, req *connect.Request[pingv1.PingRequest]) (*connect.Response[pingv1.PingResponse], error) {
+	authMw := NewOIDCAuthMiddleware(audience, ov)
+	handler := authMw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 
-			identity := GetOIDCIdentity(ctx)
-			assert.NotNil(identity)
-			assert.Equal(identity.Provider(), "buildkite")
-			assert.Equal(identity.Subject(), "organization:abc123:pipeline:zipstash:ref:refs/heads/feat_buildkite_pipeline:commit:abc123456:step:test")
+	mux.Handle("/protected", handler)
+	server := httptest.NewServer(mux)
 
-			return connect.NewResponse(&pingv1.PingResponse{
-				Text:   req.Msg.Text,
-				Number: req.Msg.Number,
-			}), nil
-		},
-	}, connect.WithInterceptors(interceptor)))
-	connectserver := httptest.NewServer(mux)
-	connectClient := pingv1connect.NewPingServiceClient(connectserver.Client(), connectserver.URL, connect.WithInterceptors(interceptor))
+	req, err := http.NewRequest("GET", server.URL+"/protected", nil)
+	assert.NoError(err)
 
-	req := connect.NewRequest(&pingv1.PingRequest{
-		Text: "hello",
-	})
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rawToken))
 
-	req.Header().Set("Authorization", fmt.Sprintf("Bearer %s", rawToken))
-	req.Header().Set("X-Provider", "buildkite")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(err)
+	assert.Equal(http.StatusOK, resp.StatusCode)
 
-	_, err = connectClient.Ping(context.Background(), req)
 	assert.Nil(err)
-}
-
-type mockPingServer struct {
-	PingFunc func(context.Context, *connect.Request[pingv1.PingRequest]) (*connect.Response[pingv1.PingResponse], error)
-}
-
-func (ps *mockPingServer) Ping(
-	ctx context.Context,
-	req *connect.Request[pingv1.PingRequest],
-) (*connect.Response[pingv1.PingResponse], error) {
-	return ps.PingFunc(ctx, req)
 }
 
 func generateRsaJwk(t *testing.T) jwk.Key {

@@ -3,18 +3,13 @@ package ciauth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/lestrrat-go/httprc/v3"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel/codes"
-
-	"github.com/wolfeidau/zipstash/pkg/trace"
 )
 
 // OIDCValidator manages OIDC token validation
@@ -31,27 +26,24 @@ func NewOIDCValidator(ctx context.Context, oidcProviders map[string]OIDCProvider
 		return nil, fmt.Errorf("failed to create JWK cache: %v", err)
 	}
 
-	vo := &OIDCCachingValidator{
+	return &OIDCCachingValidator{
 		c:             c,
 		oidcProviders: oidcProviders,
-	}
-
-	if err := vo.registerJWKSEndpoints(ctx, oidcProviders); err != nil {
-		return nil, fmt.Errorf("failed to register JWK endpoints: %v", err)
-	}
-
-	return vo, nil
+	}, nil
 }
 
-func (v *OIDCCachingValidator) registerJWKSEndpoints(ctx context.Context, oidcProviders map[string]OIDCProvider) error {
-	for _, oidcProvider := range oidcProviders {
-		if err := v.c.Register(ctx, oidcProvider.JWKSURL,
-			jwk.WithMaxInterval(24*time.Hour*7),
-			jwk.WithMinInterval(15*time.Minute),
-		); err != nil {
-			return fmt.Errorf("failed to register providers jwks URL: %v", err)
-		}
+func (v *OIDCCachingValidator) registerJWKSEndpoints(ctx context.Context, oidcProvider OIDCProvider) error {
+	if v.c.IsRegistered(ctx, oidcProvider.JWKSURL) {
+		return nil
 	}
+
+	if err := v.c.Register(ctx, oidcProvider.JWKSURL,
+		jwk.WithMaxInterval(24*time.Hour*7),
+		jwk.WithMinInterval(15*time.Minute),
+	); err != nil {
+		return fmt.Errorf("failed to register providers jwks URL: %v", err)
+	}
+
 	return nil
 }
 
@@ -76,6 +68,11 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, tokenStr, expe
 	for providerName, oidcProvider := range v.oidcProviders {
 		if issuer != oidcProvider.Issuer {
 			continue
+		}
+
+		// register the JWK endpoints for the provider
+		if err := v.registerJWKSEndpoints(ctx, oidcProvider); err != nil {
+			return nil, fmt.Errorf("failed to register JWK endpoints: %v", err)
 		}
 
 		// get the JWK set for the issuer
@@ -109,40 +106,6 @@ func (v *OIDCCachingValidator) ValidateToken(ctx context.Context, tokenStr, expe
 	}
 
 	return nil, fmt.Errorf("no matching provider found for issuer: %s", issuer)
-}
-
-func NewOIDCAuthInterceptor(audience string, validator *OIDCCachingValidator) connect.UnaryInterceptorFunc {
-	return func(next connect.UnaryFunc) connect.UnaryFunc {
-		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			ctx, span := trace.Start(ctx, "OIDC.AuthInterceptor")
-			defer span.End()
-
-			rawIDToken, err := extractBearerToken(req.Header())
-			if err != nil {
-				log.Error().Err(err).Msg("failed to extract bearer token")
-				span.SetStatus(codes.Error, err.Error())
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
-			}
-
-			oidcIdentity, err := validator.ValidateToken(ctx, rawIDToken, audience)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to validate token")
-				span.SetStatus(codes.Error, err.Error())
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid token"))
-			}
-
-			log.Info().
-				Str("provider", oidcIdentity.Provider()).
-				Str("subject", oidcIdentity.Subject()).
-				Str("issuer", oidcIdentity.Issuer()).
-				Str("owner", oidcIdentity.Owner()).
-				Msg("OIDC identity")
-
-			ctx = context.WithValue(ctx, oidcIdentityKey{}, oidcIdentity)
-
-			return next(ctx, req)
-		}
-	}
 }
 
 type OIDCIdentity interface {

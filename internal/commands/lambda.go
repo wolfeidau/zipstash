@@ -55,11 +55,6 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 		return dynamodb.NewFromConfig(awscfg)
 	}
 
-	oidcValidator, err := ciauth.NewOIDCValidator(ctx, ciauth.DefaultOIDCProviders)
-	if err != nil {
-		return fmt.Errorf("failed to create OIDC validator: %w", err)
-	}
-
 	var oteloptions []otelconnect.Option
 	oteloptions = append(oteloptions, otelconnect.WithTracerProvider(tp))
 	if s.TrustRemote {
@@ -70,11 +65,14 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	if err != nil {
 		return fmt.Errorf("failed to create otel interceptor: %w", err)
 	}
-	opts = append(opts, connect.WithInterceptors(
-		otelInterceptor,
-		ciauth.NewOIDCAuthInterceptor("zipstash.wolfe.id.au", oidcValidator),
-	),
-	)
+	opts = append(opts, connect.WithInterceptors(otelInterceptor))
+
+	oidcValidator, err := ciauth.NewOIDCValidator(ctx, ciauth.DefaultOIDCProviders)
+	if err != nil {
+		return fmt.Errorf("failed to create OIDC validator: %w", err)
+	}
+
+	authMiddleware := ciauth.NewOIDCAuthMiddleware("zipstash.wolfe.id.au", oidcValidator)
 
 	store := index.MustNewStore(ctx, index.StoreConfig{
 		CacheIndexTable:   s.CacheIndexTable,
@@ -87,7 +85,8 @@ func (s *LambdaServerCmd) Run(ctx context.Context, globals *Globals) error {
 	}, store)
 	mux := http.NewServeMux()
 	path, handler := cachev1connect.NewCacheServiceHandler(csh, opts...)
-	mux.Handle(path, handler)
+
+	mux.Handle(path, authMiddleware(handler))
 	log.Info().Str("path", path).Msg("serving")
 
 	flds := lmw.FieldMap{"version": "dev"}
