@@ -134,13 +134,14 @@ func (c *RestoreCmd) restore(ctx context.Context, globals *Globals) (bool, error
 
 	if c.Clean {
 		for _, path := range paths {
-			path, err := archive.ResolveHomeDir(path)
+			var extractedPath string
+			extractedPath, err = archive.ResolveHomeDir(path)
 			if err != nil {
 				return false, fmt.Errorf("failed to resolve home dir: %w", err)
 			}
 
-			log.Info().Str("path", path).Msg("cleaning path")
-			err = cleanPath(ctx, path)
+			log.Info().Str("path", path).Str("extractedPath", extractedPath).Msg("cleaning path")
+			err = cleanPath(ctx, extractedPath)
 			if err != nil {
 				return false, fmt.Errorf("failed to clean path: %w", err)
 			}
@@ -185,7 +186,10 @@ func combineParts(ctx context.Context, downloads []downloader.DownloadedFile) (*
 		zipFileLen += n
 	}
 
-	span.SetAttributes(attribute.Int64("zipFileLen", zipFileLen))
+	span.SetAttributes(
+		attribute.Int64("zipFileLen", zipFileLen),
+		attribute.Int("parts", len(downloads)),
+	)
 
 	return zipFile, zipFileLen, nil
 }
