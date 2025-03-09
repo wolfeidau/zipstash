@@ -9,6 +9,7 @@ import (
 
 	"github.com/klauspost/compress/zip"
 	"github.com/wolfeidau/quickzip"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/wolfeidau/zipstash/pkg/trace"
 )
@@ -38,5 +39,14 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 	if err != nil {
 		return fmt.Errorf("failed to extract zip file: %w", err)
 	}
+
+	bytesExtracted, countExtracted := extract.Written()
+
+	span.SetAttributes(
+		attribute.Int64("zipFileLen", zipFileLen),
+		attribute.Int64("fileExtracted", countExtracted),
+		attribute.Int64("bytesExtracted", bytesExtracted),
+	)
+
 	return nil
 }
