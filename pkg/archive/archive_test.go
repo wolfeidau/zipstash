@@ -2,11 +2,11 @@ package archive
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/minio/crc64nvme"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,7 +68,7 @@ func TestIsUnderHome(t *testing.T) {
 		})
 	}
 }
-func TestChecksumSHA256_Sum(t *testing.T) {
+func TestChecksumWriter_Sum(t *testing.T) {
 	tests := []struct {
 		name     string
 		expected string
@@ -77,36 +77,36 @@ func TestChecksumSHA256_Sum(t *testing.T) {
 		{
 			name:     "empty input",
 			input:    []byte{},
-			expected: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			expected: "0000000000000000",
 		},
 		{
 			name:     "simple string",
 			input:    []byte("hello"),
-			expected: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+			expected: "3377857006524257",
 		},
 		{
 			name:     "binary data",
 			input:    []byte{0xFF, 0x00, 0xAB, 0xCD},
-			expected: "064145b73178d7c9fee36e70bb497d618fadb0e8a7f30b8fe7d9761ef1be635c",
+			expected: "15d0acf18b3d9b05",
 		},
 		{
 			name:     "unicode string",
 			input:    []byte("Hello 世界"),
-			expected: "4487dd5e89032c1794903afe6f4b90aaab69972697ea5d3baa215df27c679803",
+			expected: "48a95aa42be13dd9",
 		},
 		{
 			name:     "long input",
 			input:    bytes.Repeat([]byte("a"), 1000),
-			expected: "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3",
+			expected: "eab3232b2997f5e5",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert := require.New(t)
-			c := &ChecksumSHA256{
-				sha256: sha256.New(),
-				f:      &bytes.Buffer{},
+			c := &ChecksumWriter{
+				h: crc64nvme.New(),
+				f: &bytes.Buffer{},
 			}
 			_, err := c.Write(tt.input)
 			assert.NoError(err)

@@ -39,7 +39,7 @@ func NewPresigner(s3client *s3.Client, cacheBucket string) *Presigner {
 // GenerateFileUploadInstructions generates the necessary instructions for uploading a file to S3, including presigned URLs and multipart upload details.
 // If the file size is less than the minimum multipart upload part size, a single presigned PUT URL is returned.
 // Otherwise, the function calculates the necessary offsets for a multipart upload and returns the presigned URLs for each part.
-func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, sha256sum, compression string, totalSize int64) (*UploadInstructionsResp, error) {
+func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, checksum, compression string, totalSize int64) (*UploadInstructionsResp, error) {
 	ctx, span := trace.Start(ctx, "Presigner.GenerateFileUploadInstructions")
 	defer span.End()
 
@@ -49,7 +49,7 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 		req, err := p.presignS3Client.PresignPutObject(ctx, &s3.PutObjectInput{
 			Bucket:         aws.String(p.cacheBucket),
 			Key:            aws.String(s3key),
-			ChecksumSHA256: aws.String(convertSha256ToBase64(sha256sum)),
+			ChecksumSHA256: aws.String(convertHexToBase64(checksum)),
 			ContentType:    aws.String(compressionToContentType(compression)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
@@ -88,11 +88,11 @@ func (p *Presigner) GenerateFileUploadInstructions(ctx context.Context, s3key, s
 
 	for _, offset := range offsets {
 		req, err := p.presignS3Client.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket:         aws.String(p.cacheBucket),
-			Key:            aws.String(s3key),
-			PartNumber:     aws.Int32(offset.Part),
-			UploadId:       createMultiResp.UploadId,
-			ChecksumSHA256: aws.String(convertSha256ToBase64(sha256sum)),
+			Bucket:            aws.String(p.cacheBucket),
+			Key:               aws.String(s3key),
+			PartNumber:        aws.Int32(offset.Part),
+			UploadId:          createMultiResp.UploadId,
+			ChecksumCRC64NVME: aws.String(convertHexToBase64(checksum)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = DefaultExpiration
 		})
@@ -238,8 +238,8 @@ func compressionToContentType(compression string) string {
 	}
 }
 
-func convertSha256ToBase64(sha256 string) string {
-	decoded, err := hex.DecodeString(sha256)
+func convertHexToBase64(checksum string) string {
+	decoded, err := hex.DecodeString(checksum)
 	if err != nil {
 		return ""
 	}

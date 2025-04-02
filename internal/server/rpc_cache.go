@@ -81,8 +81,9 @@ func (zs *CacheServiceHandler) CheckEntry(ctx context.Context, checkReq *connect
 	span.SetAttributes(attribute.String("cache_id", cacheID), attribute.Bool("exists", exists))
 
 	return connect.NewResponse(&v1.CheckEntryResponse{
-		Exists:    exists,
-		Sha256Sum: cacheRec.Sha256,
+		Exists:            exists,
+		Checksum:          cacheRec.Checksum,
+		ChecksumAlgorithm: "crc64nvme",
 	}), nil
 }
 
@@ -135,13 +136,14 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 	log.Info().
 		Str("Key", createReq.Msg.CacheEntry.Key).
 		Str("uploadID", uploadID).
-		Str("Sha256Sum", createReq.Msg.CacheEntry.Sha256Sum).
+		Str("Checksum", createReq.Msg.CacheEntry.Checksum).
+		Str("ChecksumAlgorithm", createReq.Msg.CacheEntry.ChecksumAlgorithm).
 		Msg("presign upload request")
 
 	uploadInstructs, err := zs.presigner.GenerateFileUploadInstructions(
 		ctx,
 		cacheID,
-		createReq.Msg.CacheEntry.Sha256Sum,
+		createReq.Msg.CacheEntry.Checksum,
 		createReq.Msg.CacheEntry.Compression,
 		createReq.Msg.CacheEntry.FileSize,
 	)
@@ -160,7 +162,8 @@ func (zs *CacheServiceHandler) CreateEntry(ctx context.Context, createReq *conne
 		CpuCount:          createReq.Msg.Platform.CpuCount,
 		Owner:             createReq.Msg.CacheEntry.Owner,
 		Provider:          fromProviderV1(createReq.Msg.ProviderType),
-		Sha256:            createReq.Msg.CacheEntry.Sha256Sum,
+		Checksum:          createReq.Msg.CacheEntry.Checksum,
+		ChecksumAlgorithm: createReq.Msg.CacheEntry.ChecksumAlgorithm,
 		Compression:       createReq.Msg.CacheEntry.Compression,
 		MultipartUploadId: uploadInstructs.MultipartUploadId,
 		FileSize:          createReq.Msg.CacheEntry.FileSize,
@@ -226,7 +229,7 @@ func (zs *CacheServiceHandler) UpdateEntry(ctx context.Context, updateReq *conne
 
 	// complete the multipart upload if it exists and the upload ID matches
 	if cacheRec.MultipartUploadId != nil {
-		_, err := zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		_, err = zs.s3Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 			Bucket:   aws.String(zs.cfg.CacheBucket),
 			Key:      aws.String(cacheID),
 			UploadId: cacheRec.MultipartUploadId,
@@ -327,12 +330,13 @@ func (zs *CacheServiceHandler) GetEntry(ctx context.Context, getReq *connect.Req
 
 	return connect.NewResponse(&v1.GetEntryResponse{
 		CacheEntry: &v1.CacheEntry{
-			Key:         existsWithFallbackRes.cacheID,
-			Name:        record.Name,
-			Branch:      record.Branch,
-			Compression: record.Compression,
-			Sha256Sum:   record.Sha256,
-			FileSize:    aws.ToInt64(res.ContentLength),
+			Key:               existsWithFallbackRes.cacheID,
+			Name:              record.Name,
+			Branch:            record.Branch,
+			Compression:       record.Compression,
+			Checksum:          record.Checksum,
+			ChecksumAlgorithm: record.ChecksumAlgorithm,
+			FileSize:          aws.ToInt64(res.ContentLength),
 		},
 		Multipart:            downloadInstructs.Multipart,
 		Fallback:             existsWithFallbackRes.fallback,

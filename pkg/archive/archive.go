@@ -1,7 +1,6 @@
 package archive
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/minio/crc64nvme"
 )
 
 const (
@@ -46,28 +47,28 @@ func isUnderHome(path string) (bool, error) {
 	return strings.HasPrefix(cleanPath, cleanHome), nil
 }
 
-type ChecksumSHA256 struct {
-	f      io.Writer
-	sha256 hash.Hash
+type ChecksumWriter struct {
+	f io.Writer
+	h hash.Hash
 }
 
-func NewChecksumSHA256(f io.Writer) *ChecksumSHA256 {
-	return &ChecksumSHA256{
-		f:      f,
-		sha256: sha256.New(),
+func NewChecksumWriter(f io.Writer) *ChecksumWriter {
+	return &ChecksumWriter{
+		f: f,
+		h: crc64nvme.New(),
 	}
 }
 
 // implement the io.WriteCloser interface
-func (c *ChecksumSHA256) Write(p []byte) (n int, err error) {
+func (c *ChecksumWriter) Write(p []byte) (n int, err error) {
 	n, err = c.f.Write(p)
 	if err != nil {
 		return n, err
 	}
-	c.sha256.Write(p)
+	c.h.Write(p)
 	return n, nil
 }
 
-func (c *ChecksumSHA256) Sum() string {
-	return hex.EncodeToString(c.sha256.Sum(nil))
+func (c *ChecksumWriter) Sum() string {
+	return hex.EncodeToString(c.h.Sum(nil))
 }
