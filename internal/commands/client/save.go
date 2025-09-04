@@ -96,21 +96,22 @@ func (c *SaveCmd) save(ctx context.Context, globals *Globals) error {
 	log.Info().
 		Str("path", fileInfo.ArchivePath).
 		Int64("size", fileInfo.Size).
-		Str("sha256sum", fileInfo.Sha256sum).
+		Str("checksum", fileInfo.Checksum).
 		Dur("duration_ms", time.Since(start)).
 		Msg("archive built")
 
 	req := newAuthenticatedProviderRequest(&cachev1.CreateEntryRequest{
 		ProviderType: convertProviderTypeV1(c.TokenSource),
 		CacheEntry: &cachev1.CacheEntry{
-			Key:         c.Key,
-			Compression: "zip",
-			FileSize:    fileInfo.Size,
-			Sha256Sum:   fileInfo.Sha256sum,
-			Paths:       paths,
-			Name:        c.Name,
-			Branch:      c.Branch,
-			Owner:       c.Owner,
+			Key:               c.Key,
+			Compression:       "zip",
+			FileSize:          fileInfo.Size,
+			Checksum:          fileInfo.Checksum,
+			ChecksumAlgorithm: "crc64nvme",
+			Paths:             paths,
+			Name:              c.Name,
+			Branch:            c.Branch,
+			Owner:             c.Owner,
 		},
 		Platform: &cachev1.Platform{
 			OperatingSystem: runtime.GOOS,

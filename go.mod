@@ -18,6 +18,7 @@ require (
 	github.com/klauspost/compress v1.17.11
 	github.com/lestrrat-go/httprc/v3 v3.0.0-beta1
 	github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1
+	github.com/minio/crc64nvme v1.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	github.com/wolfeidau/dynastorev2 v0.6.0
@@ -65,6 +66,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect

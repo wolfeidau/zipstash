@@ -18,7 +18,7 @@ import (
 type ArchiveInfo struct {
 	Stats       map[string]int64
 	ArchivePath string
-	Sha256sum   string
+	Checksum    string
 	Size        int64
 }
 
@@ -37,9 +37,9 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	}
 	defer archiveFile.Close()
 
-	checksummer := NewChecksumSHA256(archiveFile)
+	checksummer := NewChecksumWriter(archiveFile)
 
-	// wrap the file in an io.Writer which records the sha256sum of the file
+	// wrap the file in an io.Writer which records the Checksum of the file
 	arc, err := quickzip.NewArchiver(
 		checksummer,
 		quickzip.WithArchiverMethod(zstd.ZipMethodWinZip),
@@ -99,14 +99,14 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	}
 
 	span.SetAttributes(
-		attribute.String("Sha256sum", checksummer.Sum()),
+		attribute.String("Checksum", checksummer.Sum()),
 		attribute.Int64("Size", stat.Size()),
 	)
 
 	return &ArchiveInfo{
 		ArchivePath: archiveFile.Name(),
 		Size:        stat.Size(),
-		Sha256sum:   checksummer.Sum(),
+		Checksum:    checksummer.Sum(),
 		Stats:       map[string]int64{},
 	}, nil
 }

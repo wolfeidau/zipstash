@@ -18,7 +18,8 @@ type CacheRecord struct {
 	Key               string    `json:"id"`
 	Name              string    `json:"name"`
 	Branch            string    `json:"branch"`
-	Sha256            string    `json:"sha256"`
+	Checksum          string    `json:"checksum"`
+	ChecksumAlgorithm string    `json:"checksum_algorithm"`
 	Compression       string    `json:"compression"`
 	Architecture      string    `json:"architecture"`
 	OperatingSystem   string    `json:"operating_system"`

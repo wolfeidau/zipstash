@@ -38,7 +38,10 @@ message CacheEntry {
   string compression = 6 [(buf.validate.field).string = {
     in: ["zip"]
   }];
-  string sha256sum = 7 [(buf.validate.field).string = {min_len: 64}];
+  string checksum = 7 [(buf.validate.field).string = {min_len: 1}];
+  string checksum_algorithm = 10 [(buf.validate.field).string = {
+    in: ["crc64nvme"]
+  }];
   repeated string paths = 8;
   google.protobuf.Timestamp entry_created = 9;
 }
@@ -127,7 +130,8 @@ message CheckEntryRequest {
 
 message CheckEntryResponse {
   bool exists = 1;
-  string sha256sum = 2;
+  string checksum = 2;
+  string checksum_algorithm = 3;
 }
 
 message Platform {
